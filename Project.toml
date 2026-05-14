@@ -1,6 +1,6 @@
 name = "TightBindingToolkit"
 uuid = "2233325a-6eb3-486f-aff0-670e0939fa7e"
-version = "4.0.0"
+version = "3.0.0"
 authors = ["Anjishnu Bose", "Sreekar Voleti", "Samuel Vadnais", "Andrew Hardy"]
 
 [deps]
@@ -19,7 +19,7 @@ TensorCast = "02d47bb6-7ce6-556a-be16-bb1710789e2b"
 Tullio = "bc48ee85-29a4-5162-ae0b-a64e1601d4bc"
 
 [compat]
-Bijections = "0.1"
+Bijections = "0.1, 0.2"
 Documenter = "1.17.0"
 DocumenterTools = "0.1.21"
 FFTW = "1"
