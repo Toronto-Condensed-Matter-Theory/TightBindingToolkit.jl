@@ -5,3 +5,11 @@ Modules = [TightBindingToolkit, TightBindingToolkit.LatticeStruct, TightBindingT
 Private = false
 Pages   = ["Lattice.jl", "DesignLattice.jl"]
 ```
+
+## Flux
+
+```@autodocs
+Modules = [TightBindingToolkit.Flux]
+Private = false
+Pages   = ["Flux.jl"]
+```

@@ -4,6 +4,7 @@
 *.jld2
 *.dat
 *.npz
+.history/
 Sample/Honeycomb_KaneMele.jl
 Sample/HoneycombKekule.jl
 Sample/SimpleTightBindingWith12Unitcells.jl

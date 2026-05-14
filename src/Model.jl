@@ -1,6 +1,6 @@
 module TBModel
 
-    export Model , FindFilling , GetMu! , GetFilling! , GetCount , GetGk! , GetGr!, SolveModel!, GetGap!, FreeEnergy, GetOrderParameter
+    export Model , FindFilling , GetMu! , GetFilling! , GetCount , GetGk! , GetGr!, SolveModel!, GetGap!, FreeEnergy, GetOrderParameter, FindEntropy, GetRSEnergy, GetBondCoorelation
 
     using ..TightBindingToolkit.Useful: Meshgrid, DistFunction, DeriDistFunction, FFTArrayofMatrix, BinarySearch
     using ..TightBindingToolkit.UCell: UnitCell, Bond
@@ -83,7 +83,7 @@ Function to get chemical potential for a given `Model`, within a tolerance.
             energies  =   sort(reduce(vcat, M.Ham.bands))
             M.mu      =   (energies[floor(Int64, length(energies)*M.filling)] + energies[floor(Int64, length(energies)*M.filling)+1])/2
         else
-            M.mu      =   BinarySearch(M.filling, M.Ham.bandwidth, FindFilling, (M.Ham.bands, M.T, M.stat) ; initial = guess, x_tol=mu_tol, target_tol = filling_tol)
+            M.mu      =   BinarySearch(M.filling, 10 .* M.Ham.bandwidth, FindFilling, (M.Ham.bands, M.T, M.stat) ; initial = guess, x_tol=mu_tol, target_tol = filling_tol)
             @info "Found chemical potential μ = $(M.mu) for given filling = $(M.filling)."
         end
     end
@@ -226,5 +226,82 @@ Calculate the free energy of the given `Model`.
 
         order   =   sum(order) / length(order)
     end
+
+@doc """
+```julia
+FindEntropy(M::Model;) --> Float64
+```
+Calculate the entropy of given Model.
+
+"""
+function FindEntropy(M::Model,tol=1e-10)
+    sum_entropy = 0.0
+    for n in 1:length(M.Ham.bands[1])
+        fk = DistFunction.(getindex.(M.Ham.bands,n),T=M.T,mu=M.mu)
+        one_m_fk = 1.0 .- fk
+        #Check elements of one_m_fk are non-zero and positive and change them to 1.0 in this case
+        #Check elements of fk are non-zero and positive and change them to 1.0 in this case
+        for i in eachindex(one_m_fk)
+            if one_m_fk[i] <= tol
+                one_m_fk[i] = 1.0
+            end
+            if fk[i] <= tol
+                fk[i] = 1.0
+            end
+        end
+        partial_entropy = -sum(one_m_fk .* log.(one_m_fk)) - sum(fk .* log.(fk))
+        # println("Partial entropy for band $n: ", partial_entropy)
+        sum_entropy += partial_entropy
+    end
+    return sum_entropy/(prod(M.bz.gridSize)*length(M.uc.basis))
+end
+
+function GetBondCoorelation(Gr::Array{Matrix{ComplexF64}, T}, base::Int64, target::Int64, offset::Vector{Int64}, uc::UnitCell, bz::BZ) :: Matrix{ComplexF64} where {T}
+    index       =   mod.((-offset) , bz.gridSize) .+ ones(Int64, length(offset))
+    ##### TODO : the extra - sign in offset is because right now G[r] = <f^{dagger}_0 . f_{-r}> ===> NEED TO FIX THIS
+    b1          =   uc.localDim * (base   - 1) + 1
+    b2          =   uc.localDim * (target - 1) + 1
+
+    G           =   Gr[index...][b1 : b1 + uc.localDim - 1, b2 : b2 + uc.localDim - 1]
+    return G
+end
+
+function GetBondCoorelation(Gr::Array{Matrix{ComplexF64}, T}, bond::Bond, uc::UnitCell, bz::BZ) :: Matrix{ComplexF64} where {T}
+    index       =   mod.((-bond.offset) , bz.gridSize) .+ ones(Int64, length(bond.offset))
+    ##### TODO : the extra - sign in offset is because right now G[r] = <f^{dagger}_0 . f_{-r}> ===> NEED TO FIX THIS
+    b1          =   uc.localDim * (bond.base   - 1) + 1
+    b2          =   uc.localDim * (bond.target - 1) + 1
+
+    G           =   Gr[index...][b1 : b1 + uc.localDim - 1, b2 : b2 + uc.localDim - 1]
+    return G
+end
+
+@doc """
+```julia
+GetMFTEnergy(bdgMFT::BdGMFT{T, R}) --> Float64
+```
+Returns the total mean-field energy of the BdG model including decomposed interactions.
+
+"""
+function GetRSEnergy(model::Model) :: Float64
+
+    Energy             =   0.0
+    HoppingLookup      =   Lookup(model.uc_hop)
+
+    for BondKey in keys(HoppingLookup)
+
+        G_ij        =   GetBondCoorelation(model.Gr, BondKey..., model.uc_hop, model.bz)
+        t_ij        =   HoppingLookup[BondKey]
+
+        if base == target && offset == [0, 0]
+                Energy      +=  sum((t_ij .* G_ij))
+                #Here only sum the conjuguate if the pairing/hopping involves bond between different sites, as the UC does not keep track of bond and its conjuguate.
+                #If it is between different d.o.f, we dont sum the conjugate because the conjuguate part is encoded in the matrix itself.
+        else
+                Energy      +=  sum((t_ij .* G_ij) + conj.((t_ij .* G_ij)))
+        end
+    end
+    return real(Energy) / length(model.uc_hop.basis)
+end
 
 end

@@ -1,6 +1,6 @@
 module LatticeStruct
 
-    export Lattice, FillSites!, FillBonds!, FillLattice!, GetBCPhase, ApplyBCToSite
+    export Lattice, FillSites!, FillBonds!, FillLattice!, GetBCPhase, ApplyBCToSite, GetMaxCoordinationNumber
 
     using LinearAlgebra, Bijections
 

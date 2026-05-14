@@ -41,7 +41,7 @@ Returns the reciprocal lattice vectors corresponding to the given Unit Cell.
             return [ b1 , b2 , b3 ]
 
         else
-            @warn "Getting reciprocal lattice vectors only works for upto d=3 lattices right now."
+            @warn "Getting reciprocal lattice vectors only works for up to d=3 lattices right now."
         end
     end
 
@@ -75,7 +75,7 @@ BZ(gridSize::Vector{Int64})
         BZ(gridSize::Int64, dims::Int64) 	=	new{}(Vector{Float64}[], repeat([gridSize], dims), Array{Float64, dims}[], Array{Vector{Float64}}(undef, zeros(Int64, dims)...), Dict(), Int64[])
         
         function BZ(gridSize::Int64)
-            @warn "Positional argument `dims' not passed in BZ. Resorting to its default value of 2."
+            #@warn "Positional argument `dims' not passed in BZ. Resorting to its default value of 2."
             dims 	=	2
             return   new{}(Vector{Float64}[], repeat([gridSize], dims), Array{Float64, dims}[], Array{Vector{Float64}}(undef, zeros(Int64, dims)...), Dict(), Int64[])
         end
@@ -119,11 +119,11 @@ The modified Monkhorst grid takes into account the desired boundary condition `B
         elseif dims == 2    ##### 2d BZ
     
             bz.HighSymPoints["M1"]      =    @. 0.5 * bz.basis[1] + 0.0 * bz.basis[2]     ##### The 3 possible M points
-            bz.HighSymPoints["M2"]      =    @. 0.0 * bz.basis[1] + 0.5 * bz.basis[2]
-            bz.HighSymPoints["M3"]      =    @. 0.5 * bz.basis[1] + 0.5 * bz.basis[2]
+            bz.HighSymPoints["X"]      =    @. 0.0 * bz.basis[1] + 0.5 * bz.basis[2]
+            bz.HighSymPoints["M2"]      =    @. 0.5 * bz.basis[1] + 0.5 * bz.basis[2]
             bz.HighSymPoints["-M1"]     =  -(@. 0.5 * bz.basis[1] + 0.0 * bz.basis[2])     ##### The 3 possible M points
-            bz.HighSymPoints["-M2"]     =  -(@. 0.0 * bz.basis[1] + 0.5 * bz.basis[2])
-            bz.HighSymPoints["-M3"]     =  -(@. 0.5 * bz.basis[1] + 0.5 * bz.basis[2])
+            bz.HighSymPoints["-X"]     =  -(@. 0.0 * bz.basis[1] + 0.5 * bz.basis[2])
+            bz.HighSymPoints["-M2"]     =  -(@. 0.5 * bz.basis[1] + 0.5 * bz.basis[2])
     
             if isapprox(VecAngle(bz.basis[1], bz.basis[2]), 2*pi/3, atol=1e-4, rtol=1e-4)   ##### The K points depend on the relative angle of the reciprocal basis.
                 bz.HighSymPoints["K1"]      =   @. (2/3) * bz.basis[1] + (1/3) * bz.basis[2]

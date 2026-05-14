@@ -1,4 +1,4 @@
-# TightBindingTookit.jl
+# TightBindingToobox.jl
 
 TightBindingToolkit.jl is a Julia package meant for constructing, and obtaining useful properties of generic tight-binding models. It supports any lattice structure, with any user-defined bonds on that lattice. It also has support for any spin of the particle hopping on the lattice.
 
@@ -19,7 +19,7 @@ Currently supported :
 * Filling the model at given chemical potential, and calculating gaps. (v1.3) : also supported for BdG systems.
     |![Alt text](./assets/KitaevChain.png)|
     |:--:| 
-    |*Band structure of the Kitaev Chain in 1-d.*|
+    |*Band structure of the boxaev Chain in 1-d.*|
 * Fermi surfaces of systems
     |![Alt text](./assets/Triangle_123NN_FS.png)|
     |:--:| 

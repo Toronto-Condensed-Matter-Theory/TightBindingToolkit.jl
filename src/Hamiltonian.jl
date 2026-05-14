@@ -85,7 +85,7 @@ Returns the full Hamiltonian at all momentum points in `BZ`, corresponding to th
         ##### The full BdG Hamiltonian in the nambu basis.
         Hk      =   hcat(Tk , Δk)
         Hk      =   vcat(Hk , hcat(Δk' , -transpose(Tmk)))
-        return (1/2 .* Hk)
+        return (Hk)
     end
 
     function FillHamiltonian(uc::UnitCell{2}, bz::BZ)
@@ -163,7 +163,7 @@ Faster implementation of modifying ONLY the on-site field part of a `Hamiltonian
             Ham.H   .+=   Ref(kron(diagm(getindex.(uc.fields, dim) .- newFields) , uc.OnSiteMats[dim]))
             DiagonalizeHamiltonian!(Ham ; verbose=verbose)
         else
-            Ham.H   .+=   Ref(kron(SpinMats(1//2)[3], kron(diagm(getindex.(uc.fields, dim) .- newFields) , uc.OnSiteMats[dim])))  ##### The extra Sz corresponds to the nambu basis.
+            Ham.H   .+=   Ref(kron(SpinMats(1//2)[3] * 2, kron(diagm(getindex.(uc.fields, dim) .- newFields) , uc.OnSiteMats[dim])))  ##### The extra Sz corresponds to the nambu basis.
             DiagonalizeHamiltonian!(Ham ; verbose=verbose)
         end
     

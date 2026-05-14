@@ -1,5 +1,5 @@
 module conduct
-    export Conductivity, SpectralFunction, SpectralContribution, GetConductivity!
+    export Conductivity, SpectralFunction, SpectralContribution, GetConductivity!, GetSpectralFunction!
 
     using LinearAlgebra, Logging
 

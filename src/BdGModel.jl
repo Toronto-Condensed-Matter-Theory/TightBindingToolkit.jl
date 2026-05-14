@@ -1,15 +1,15 @@
 module BdG
-    export BdGModel, FindFilling, GetMu!, GetFilling!, GetGk!, GetGr!, SolveModel!, GetGap!, FreeEnergy
+    export BdGModel, FindFilling, GetMu!, GetFilling!, GetGk!, GetGr!, SolveModel!, GetGap!, FreeEnergy, FindEntropy, GetRSEnergy
 
     using ..TightBindingToolkit.Useful: DistFunction, DeriDistFunction, BinarySearch, FFTArrayofMatrix
     using ..TightBindingToolkit.UCell: UnitCell
-    using ..TightBindingToolkit.DesignUCell: ModifyIsotropicFields!
+    using ..TightBindingToolkit.DesignUCell: ModifyIsotropicFields!, Lookup
     using ..TightBindingToolkit.BZone:BZ, MomentumPhaseFFT
     using ..TightBindingToolkit.Hams:Hamiltonian, ModifyHamiltonianField!
 
     using LinearAlgebra, Tullio, TensorCast, Logging, Statistics
 
-    import ..TightBindingToolkit.TBModel:FindFilling, GetMu!, GetFilling!, GetGk!, GetGr!, SolveModel!, GetGap!, FreeEnergy
+    import ..TightBindingToolkit.TBModel:FindFilling, GetMu!, GetFilling!, GetGk!, GetGr!, SolveModel!, GetGap!, FreeEnergy, FindEntropy, GetRSEnergy, GetBondCoorelation
 
 @doc """
     `BdGModel` is a data type representing a general Tight Binding system with pairing.
@@ -117,6 +117,17 @@ Function to get the correct chemical potential given a filling.
     end
 
 
+    function block_matrix(N::Int)
+        iseven(N) || throw(ArgumentError("N must be even"))
+        M = zeros(Int, N, N)
+        h = N ÷ 2
+        for i in 1:h
+            M[i, i] = 1
+            M[h + i, N - i + 1] = 1
+        end
+        return M
+    end
+
 """
 ```julia
 GetGk!(M::BdGModel)
@@ -128,10 +139,13 @@ Finding the Greens functions, and anomalous greens functions in momentum space a
         N       =   length(M.Ham.bands[begin])
         Eks     =   reshape(getindex.(M.Ham.bands, Ref(1:N÷2)) , prod(M.bz.gridSize))   ##### Only the negative energies from the bdG spectrum
 
-        U11s    =   reshape(getindex.(M.Ham.states, Ref(1:N÷2), Ref(1:N÷2)) , prod(M.bz.gridSize))          ##### The 4 different quadrants in the Unitary relating the BdG quasiparticles and the nambu basis
-        U21s    =   reshape(getindex.(M.Ham.states, Ref(N÷2 + 1: N), Ref(1:N÷2)) , prod(M.bz.gridSize))
-        U12s    =   reshape(getindex.(M.Ham.states, Ref(1:N÷2), Ref(N÷2 + 1: N)) , prod(M.bz.gridSize))
-        U22s    =   reshape(getindex.(M.Ham.states, Ref(N÷2 + 1: N), Ref(N÷2 + 1: N)) , prod(M.bz.gridSize))
+        temp_states = M.Ham.states .* Ref(block_matrix(size(M.Ham.states[begin])[1]))
+        
+
+        U11s    =   reshape(getindex.(temp_states, Ref(1:N÷2), Ref(1:N÷2)) , prod(M.bz.gridSize))          ##### The 4 different quadrants in the Unitary relating the BdG quasiparticles and the nambu basis
+        U21s    =   reshape(getindex.(temp_states, Ref(N÷2 + 1: N), Ref(1:N÷2)) , prod(M.bz.gridSize))
+        U12s    =   reshape(getindex.(temp_states, Ref(1:N÷2), Ref(N÷2 + 1: N)) , prod(M.bz.gridSize))
+        U22s    =   reshape(getindex.(temp_states, Ref(N÷2 + 1: N), Ref(N÷2 + 1: N)) , prod(M.bz.gridSize))
 
         nFs     =   DistFunction.(Eks; T=M.T, mu=0.0, stat=M.stat)
 
@@ -235,5 +249,83 @@ function entropy(M::BdGModel)
 
     return S/(2 * length(M.bz.ks))
 end
+
+@doc """
+```julia
+FindEntropy(M::BdGModel,tol=1e-10) --> Float64
+```
+Calculate the internal energy of the given `BdGModel`. tol defines a tolerance for which the logarithm will be computed.
+Any smaller value will be ignored.
+"""
+
+    function FindEntropy(M::BdGModel,tol=1e-10) ::Float64
+        sum_entropy = 0.0
+        for n in 1:length(M.Ham.bands[1])
+            fk = DistFunction(getindex.(M.Ham.bands,n),T=M.T,mu=0.0)
+            one_m_fk = 1.0 .- fk
+            #Check elements of one_m_fk are non-zero and positive and change them to 1.0 in this case
+            #Check elements of fk are non-zero and positive and change them to 1.0 in this case
+            for i in eachindex(one_m_fk)
+                if one_m_fk[i] <= tol
+                    one_m_fk[i] = 1.0
+                end
+                if fk[i] <= tol
+                    fk[i] = 1.0
+                end
+            end
+
+            partial_entropy = -sum(one_m_fk .* log.(one_m_fk) .+ fk .* log.(fk))
+            println("Partial entropy for band $n: ", partial_entropy)
+            sum_entropy += partial_entropy
+        end
+        return sum_entropy/(2*prod(M.bz.gridSize)*length(M.uc_hop.basis))
+    end
+
+@doc """
+```julia
+GetRSEnergy(BdGModel) --> Float64
+```
+Returns the total energy of the BdG model including decomposed interactions. Computed from real space bonds.
+
+"""
+    function GetRSEnergy(bdgmodel::BdGModel) :: Float64
+
+        Energy_t           =   0.0
+        Energy_p           =   0.0
+        HoppingLookup      =   Lookup(bdgmodel.uc_hop)
+        PairingLookup      =   Lookup(bdgmodel.uc_pair)
+
+        for BondKey in keys(HoppingLookup)
+            base,target,offset = BondKey[1],BondKey[2],BondKey[3]
+            G_ij        =   GetBondCoorelation(bdgmodel.Gr, BondKey..., bdgmodel.uc_hop, bdgmodel.bz)
+            t_ij        =   HoppingLookup[BondKey]
+            # println(t_ij .* G_ij)
+            # println(sum((t_ij .* G_ij) + conj.((t_ij .* G_ij))))
+            if base == target && offset == [0, 0]
+                Energy_t      +=  sum((t_ij .* G_ij))
+                #Here only sum the conjuguate if the pairing/hopping involves bond between different sites, as the UC does not keep track of bond and its conjuguate.
+                #If it is between different d.o.f, we dont sum the conjugate because the conjuguate part is encoded in the matrix itself.
+            else
+                Energy_t      +=  sum((t_ij .* G_ij) + conj.((t_ij .* G_ij)))
+            end
+        end
+            println("Hopping Energy = ",Energy_t)
+        for BondKey in keys(PairingLookup)
+            base,target,offset = BondKey[1],BondKey[2],BondKey[3]
+            F_ij        =   GetBondCoorelation(bdgmodel.Fr, BondKey..., bdgmodel.uc_pair, bdgmodel.bz)
+            p_ij        =   PairingLookup[BondKey]
+            # println(p_ij .* F_ij)
+            # println(sum((p_ij .* F_ij) + conj.((p_ij .* F_ij))))
+            if base == target && offset == [0, 0]
+                Energy_p      +=  sum((p_ij .* F_ij))
+                #Here only sum the conjuguate if the pairing/hopping involves bond between different sites, as the UC does not keep track of bond and its conjuguate.
+                #If it is between different d.o.f, we dont sum the conjugate because the conjuguate part is encoded in the matrix itself.
+            else
+                Energy_p      +=  sum((p_ij .* F_ij) + conj.((p_ij .* F_ij)))
+            end
+        end
+            println("Pairing Energy = ",Energy_p)
+        return real(Energy_t + Energy_p) / length(bdgmodel.uc_hop.basis)
+    end
 
 end

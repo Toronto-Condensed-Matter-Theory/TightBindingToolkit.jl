@@ -7,6 +7,7 @@ makedocs(
     modules     =   [TightBindingToolkit, TightBindingToolkit.UCell, TightBindingToolkit.DesignUCell, TightBindingToolkit.ExpandUCell, TightBindingToolkit.Parameters, TightBindingToolkit.LatticeStruct, TightBindingToolkit.DesignLattice, TightBindingToolkit.BZone, TightBindingToolkit.Hams, TightBindingToolkit.TBModel, TightBindingToolkit.Chern, TightBindingToolkit.suscep, TightBindingToolkit.conduct]   ,
     pages = [
         "Introduction"              =>  "index.md",
+        "Utilities"                 =>  "Utilities.md",
         "Unit Cell"                 =>  "UnitCell.md",
         "Parameters"                =>  "Params.md",
         "Lattice"                   =>  "Lattice.md",
@@ -22,6 +23,6 @@ makedocs(
 )
 
 deploydocs(
-    repo = "github.com/Anjishnubose/TightBindingToolkit.jl.git",
+    repo = "github.com/andrewkhardy/TightBindingToolkit.jl",
     devbranch = "main"
 )

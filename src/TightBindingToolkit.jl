@@ -67,7 +67,7 @@ export FillHamiltonian, LatticeHamiltonian, DiagonalizeHamiltonian!, Slater, Sin
 ##### Module to define a Tight-Binding Model structure which takes into account thermodynamical parameters such as temperature and filling etc.
 include("Model.jl")
 using .TBModel
-export Model , FindFilling , GetMu! , GetFilling! , GetCount , GetGk! , GetGr!, SolveModel!, GetGap!, FreeEnergy, GetOrderParameter
+export Model , FindFilling , GetMu! , GetFilling! , GetCount , GetGk! , GetGr!, SolveModel!, GetGap!, FreeEnergy, GetOrderParameter, FindEntropy, GetBondCoorelation, GetRSEnergy
 
 include("LatticeModel.jl")
 using .LatModel
@@ -81,7 +81,7 @@ export Translations, Degeneracies, FindQuantumNumbers
 ##### Module to define the equivalent but for bdG systems with pairing.
 include("BdGModel.jl")
 using .BdG
-export BdGModel, FindFilling , GetMu! , GetFilling! , GetGk! , GetGr!, SolveModel!, GetGap!, FreeEnergy
+export BdGModel, FindFilling , GetMu! , GetFilling! , GetGk! , GetGr!, SolveModel!, GetGap!, FreeEnergy, FindEntropy, GetGroundEnergy, GetRSEnergy
 
 ##### Module to calculate generalized Chern numbers
 include("Chern.jl")
@@ -101,6 +101,16 @@ export Conductivity, SpectralFunction, SpectralContribution, GetConductivity!
 ##### Module containing some plotting functions
 include("Plot.jl")
 using .PlotTB
-export Plot_UnitCell! , Plot_Band_Contour!, Plot_Band_Structure!, Plot_FS!, Plot_Fields!, Plot_Lattice!
+export Plot_UnitCell , Plot_Band_Contour, Plot_Band_Structure, Plot_FS, Plot_Fields, Plot_Lattice
+
+##### Module for quantum geometric tensor and related metric quantities
+include("Metric.jl")
+using .MetricTB
+export GeoTensor, Curvature, KuboChern, get_metric_measures, hexagon, plot_metric_data
+
+##### Module for spectral response functions
+include("SpectralResponse.jl")
+using .SpecResponse
+export spectral, response
 
 end

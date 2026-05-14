@@ -1,6 +1,4 @@
-using Plots, LaTeXStrings#, TightBindingToolkit
-include("../src/TightBindingToolkit.jl")
-using .TightBindingToolkit
+using Plots, LaTeXStrings, TightBindingToolkit
 
 """
 This script sets up a simple triangular lattice with first, second, and third neighbour hoppings.
@@ -63,8 +61,8 @@ const T     =   0.001
 const mu    =   1.0   
 H       =   Hamiltonian(UC, bz)
 DiagonalizeHamiltonian!(H)
-p = Plot_UnitCell!(UC ; range=2)
-
+p = Plot_UnitCell(UC ; range=2)
+display(p)
 """
 Filling the model at this chemical potential with spin-1/2 fermions.
 """
@@ -87,7 +85,7 @@ const spread  = 5e-3
 
 suscep  =   Susceptibility(path, Omegas, TriangleModel ; eta=spread)
 # FillChis!(suscep, TriangleModel)
-FillRPAChis!(suscep, TriangleModel, JParam ; Generators = [[1, 1], [2, 2], [3, 3]])
+FillRPAChis!(suscep, TriangleModel, [JParam] ; Generators = [[1, 1], [2, 2], [3, 3]])
 ##### Plotting the real part of the magnetic susceptibility at 0 energy, and momentum points along the path.
 # plot(real.(suscep.chis["zz"][1, :]), labels="χ_zz(Ω=0, Q)", lw=2.0, markershape=:circle, markercolor="red")
 
