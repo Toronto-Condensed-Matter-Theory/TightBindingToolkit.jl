@@ -1,6 +1,6 @@
 name = "TightBindingToolkit"
 uuid = "2233325a-6eb3-486f-aff0-670e0939fa7e"
-version = "3.0.0"
+version = "2.4.0"
 authors = ["Anjishnu Bose", "Sreekar Voleti", "Samuel Vadnais", "Andrew Hardy"]
 
 [deps]
