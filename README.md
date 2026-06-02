@@ -16,7 +16,7 @@ Pkg.add("TightBindingToolkit")
 Until the package is registered in the General registry, install via URL:
 ```julia
 using Pkg
-Pkg.add(url="https://https://github.com/Toronto-Condensed-Matter-TheoryTightBindingToolkit.jl")
+Pkg.add(url="https://github.com/Toronto-Condensed-Matter-TheoryTightBindingToolkit.jl")
 ```
 
 ## Features
