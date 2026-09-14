@@ -126,6 +126,34 @@ The optional input `subs` is meant for isotropic bonds when only a subset of sub
         
         AddIsotropicBonds!( param, uc, dist, ComplexF64.(reshape([mat], dims...)), label; checkOffsetRange = checkOffsetRange , subs = subs)
     end
+
+    function AddIsotropicBonds!( param::Param{T, R}, uc::UnitCell{T2} , dist::Float64 ,direction::Array{<:Number}, mat::Array{<:Number, T} , label::String; checkOffsetRange::Int64=2 , subs::Vector{Int64}=collect(1:length(uc.basis)) ) where {T, R, T2}
+        @assert size(direction) == size(uc.primitives[begin]) "Direction vector has inconsistent dimension when compared to primitive vectors of the UnitCell!"
+        offsets 		=	GetAllOffsets(checkOffsetRange, length(uc.primitives))
+        for i in subs
+            for j in subs
+                for offset in offsets
+                    deltaij_v = sum( offset.*uc.primitives ) + (uc.basis[j] - uc.basis[i] )
+                    if (norm( deltaij_v) ≈ dist && norm(dot(deltaij_v,direction)/(norm(deltaij_v)*norm(direction))) ≈ 1.0) 
+                        proposal 	=	Bond(i, j, offset, ComplexF64.(mat), dist, label)
+
+                        if sum(IsSameBond.( Ref(proposal) , param.unitBonds ))==0
+                            push!( param.unitBonds , proposal )
+
+                            if param.label==""
+                                param.label     =   label
+                                param.dist      =   dist
+                            else
+                                @assert param.label == label && param.dist == dist "Inconsistent label or distance given"
+                            end
+                        end
+                    end
+                end
+
+            end
+        end
+    end
+
 @doc """
 ```julia
 AddSimilarBond!(param::Param{T, R}, uc::UnitCell{T2}, bond::Bond{T} ;  subs::Vector{Int64}=collect(1:length(uc.basis)), checkOffsetRange::Int64=2) where {T, R}
