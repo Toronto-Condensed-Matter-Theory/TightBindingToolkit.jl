@@ -94,7 +94,6 @@ The optional input `subs` is meant for isotropic bonds when only a subset of sub
     function AddIsotropicBonds!( param::Param{T, R}, uc::UnitCell{T2} , dist::Float64 , mat::Array{<:Number, T} , label::String; checkOffsetRange::Int64=2 , subs::Vector{Int64}=collect(1:length(uc.basis)) ) where {T, R, T2}
 
         offsets 		=	GetAllOffsets(checkOffsetRange, length(uc.primitives))    
-        @assert size(offset) == length(uc.primitives) "Inconsistent offset vector dimension as compared to the UnitCell basis dimension!"
         for i in subs
             for j in subs
                 for offset in offsets
