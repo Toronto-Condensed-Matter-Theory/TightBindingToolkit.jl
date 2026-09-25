@@ -73,6 +73,8 @@ If given `mat` attribute is a number, it is converted into a 1x1 matrix when ent
 	
         @assert uc.localDim == 1
         dims 	=	repeat([uc.localDim], T)
+        @assert size(offset) == length(uc.primitives) "Inconsistent offset vector dimension as compared to the UnitCell basis dimension!"
+
     
         AddAnisotropicBond!( param, uc, base, target, offset, ComplexF64.(reshape([mat], dims...)), dist, label)
     end
@@ -92,7 +94,6 @@ The optional input `subs` is meant for isotropic bonds when only a subset of sub
     function AddIsotropicBonds!( param::Param{T, R}, uc::UnitCell{T2} , dist::Float64 , mat::Array{<:Number, T} , label::String; checkOffsetRange::Int64=2 , subs::Vector{Int64}=collect(1:length(uc.basis)) ) where {T, R, T2}
 
         offsets 		=	GetAllOffsets(checkOffsetRange, length(uc.primitives))    
-    
         for i in subs
             for j in subs
                 for offset in offsets
@@ -125,6 +126,32 @@ The optional input `subs` is meant for isotropic bonds when only a subset of sub
         AddIsotropicBonds!( param, uc, dist, ComplexF64.(reshape([mat], dims...)), label; checkOffsetRange = checkOffsetRange , subs = subs)
     end
 
+    function AddIsotropicBonds!( param::Param{T, R}, uc::UnitCell{T2} , dist::Float64 ,direction::Array{<:Number}, mat::Array{<:Number, T} , label::String; checkOffsetRange::Int64=2 , subs::Vector{Int64}=collect(1:length(uc.basis)) ) where {T, R, T2}
+        @assert size(direction) == size(uc.primitives[begin]) "Direction vector has inconsistent dimension when compared to primitive vectors of the UnitCell!"
+        offsets 		=	GetAllOffsets(checkOffsetRange, length(uc.primitives))
+        for i in subs
+            for j in subs
+                for offset in offsets
+                    deltaij_v = sum( offset.*uc.primitives ) + (uc.basis[j] - uc.basis[i] )
+                    if (norm( deltaij_v) ≈ dist && norm(dot(deltaij_v,direction)/(norm(deltaij_v)*norm(direction))) ≈ 1.0) 
+                        proposal 	=	Bond(i, j, offset, ComplexF64.(mat), dist, label)
+
+                        if sum(IsSameBond.( Ref(proposal) , param.unitBonds ))==0
+                            push!( param.unitBonds , proposal )
+
+                            if param.label==""
+                                param.label     =   label
+                                param.dist      =   dist
+                            else
+                                @assert param.label == label && param.dist == dist "Inconsistent label or distance given"
+                            end
+                        end
+                    end
+                end
+
+            end
+        end
+    end
 
 @doc """
 ```julia
