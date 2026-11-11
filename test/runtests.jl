@@ -102,5 +102,7 @@ using Test
         @test length(UC.bonds) > 0
     end
 
+    include("test_lattice.jl")
+
 end
 # Test change
