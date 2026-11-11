@@ -106,7 +106,7 @@ Fills all the sites, positions, and fields of the lattice using information in t
                 lattice.positions[site]     =   round.(position, digits = precision)
                 site        =   site + 1
 
-                push!(lattice.fields, lattice.uc.fields[b])
+                push!(lattice.fields, copy(lattice.uc.fields[b]))    ##### copy, so that sites do not share (alias) one field vector
 
             end
         end
