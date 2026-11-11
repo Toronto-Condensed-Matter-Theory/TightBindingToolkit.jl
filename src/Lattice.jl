@@ -125,7 +125,7 @@ Returns the effective real-space offset of `site` given a lattice size `L`, and 
 """
     function ApplyBCToSite(site::Vector{Int64}, L::Vector{Int64}, BC::Vector{ComplexF64}) :: Vector{Int64}
 
-        BCStrength  =   Bool.(abs.(BC))     ##### strength of the boundary condition refers to it being 1 (for a periodic system with arbitrary phase), or 0 for open systems.
+        BCStrength  =   abs.(BC) .> 1e-8     ##### strength of the boundary condition refers to it being 1 (for a periodic system with arbitrary phase), or 0 for open systems. Tolerance since e.g. abs(cis(2π/3)) = 0.9999999999999999.
         BCPhase     =   angle.(BC)
 
         LEffective  =   L .* BCStrength + .!(BCStrength)    ##### Leff_i = L if system is closed, or 1 if system is open along that dimension
