@@ -1,5 +1,5 @@
 module PlotTB
-    export Plot_UnitCell, Plot_Band_Contour, Plot_Band_Structure, Plot_FS, Plot_Fields, Plot_Lattice
+    export Plot_UnitCell, Plot_Band_Contour, Plot_Band_Structure, Plot_FS, Plot_FS!, FirstBZBoundary, Plot_Fields, Plot_Lattice
 
     using LinearAlgebra, LaTeXStrings, Plots
 
@@ -8,8 +8,8 @@ module PlotTB
     using ..TightBindingToolkit.UCell:UnitCell
     using ..TightBindingToolkit.DesignUCell:Lookup
     using ..TightBindingToolkit.LatticeStruct: Lattice
-    using ..TightBindingToolkit.BZone:BZ, GetQIndex, GetBZPath, CombinedBZPath, ReduceQ
-    using ..TightBindingToolkit.Hams:Hamiltonian
+    using ..TightBindingToolkit.BZone:BZ, GetRLVs, GetQIndex, GetBZPath, CombinedBZPath, ReduceQ
+    using ..TightBindingToolkit.Hams:Hamiltonian, FillHoppingHamiltonian, BondDisplacements, OnSiteBlocks
     using ..TightBindingToolkit.TBModel:Model
     using ..TightBindingToolkit.BdG:BdGModel
 
@@ -377,7 +377,9 @@ Function to draw the fermi surface at `Efermi` for the given `Hamiltonian` on th
 
                 x       =   getindex.(ks, 1)
                 y       =   getindex.(ks, 2)
-                contour!(x, y, energies, levels=Efermi, color=cmp, size=(600,600), cbar = cbar, lw=2, clims=extrema(Efermi), colorbar_ticks=round.(Efermi[1:Int64(floor(length(Efermi) / 10)):end], digits = 3), fill = true)
+                ##### a single level has no colour range to spread over
+                scale   =   length(Efermi) > 1 ? (clims = extrema(Efermi), colorbar_ticks = round.(Efermi[1:max(1, length(Efermi) ÷ 10):end], digits = 3)) : NamedTuple()
+                contour!(x, y, energies; levels=Efermi, color=cmp, size=(600,600), cbar = cbar, lw=2, fill = true, scale...)
 
                 for key in keys(bz.HighSymPoints)
                     p = Tuple(shift .+ bz.HighSymPoints[key])
@@ -410,6 +412,143 @@ Function to draw the fermi surface at `Efermi` for the given `Hamiltonian` on th
         max_range   =   maximum(norm.(bz.basis))
         xlims!((-max_range , max_range))
         ylims!((-max_range , max_range))
+
+        return plt
+    end
+
+
+    ##### Band energies of the hopping Hamiltonian at an arbitrary momentum, with the k-independent parts computed once.
+    function BandFunction(uc::UnitCell{2})
+        deltas  =   BondDisplacements(uc)
+        onsite  =   OnSiteBlocks(uc)
+        return k -> eigvals(Hermitian(FillHoppingHamiltonian(uc, Float64.(collect(k)), deltas, onsite)))
+    end
+
+    ##### Distance from Γ to the first-BZ (Wigner-Seitz) boundary along the unit vector u.
+    function ZoneEdge(u::Vector{Float64}, Gs::Vector{Vector{Float64}}) :: Float64
+        return minimum(dot(G, G) / (2 * dot(u, G)) for G in Gs if dot(u, G) > 1e-9)
+    end
+
+    function ZoneVectors(uc::UnitCell{2}) :: Vector{Vector{Float64}}
+        b1, b2  =   GetRLVs(uc)
+        return [i * b1 + j * b2 for i in -2:2 for j in -2:2 if (i, j) != (0, 0)]
+    end
+
+    InZone(k::Vector{Float64}, Gs::Vector{Vector{Float64}} ; tol::Float64 = 1e-9) = all(dot(k, G) <= dot(G, G) / 2 + tol for G in Gs)
+
+
+@doc """
+```julia
+FirstBZBoundary(uc::UnitCell{2} ; n::Int64 = 721) --> Vector{Vector{Float64}}
+```
+Points on the boundary of the first Brillouin zone (the Wigner-Seitz cell of the reciprocal lattice) of `uc`, going once around anticlockwise, closed.
+
+"""
+    function FirstBZBoundary(uc::UnitCell{2} ; n::Int64 = 721) :: Vector{Vector{Float64}}
+        Gs  =   ZoneVectors(uc)
+        return [ZoneEdge([cos(θ), sin(θ)], Gs) .* [cos(θ), sin(θ)] for θ in range(0, 2π, length = n)]
+    end
+
+
+@doc """
+```julia
+Plot_FS(uc::UnitCell{2}, mu::Real ; kwargs...) --> Plots.plot()
+Plot_FS!(plt, uc::UnitCell{2}, mu::Real ; kwargs...) --> Plots.plot()
+```
+Draws the Fermi surface ``ε_n(k) = μ`` of the hopping Hamiltonian of `uc` in the first Brillouin zone, with the zone boundary.
+The bands are evaluated directly at every point of a Cartesian grid, so no `BZ` or `Hamiltonian` is needed and any 2d lattice works.
+
+- `Q` : a nesting vector (Cartesian). Also draws the Fermi surface translated by `Q` (folded back into the zone), dashed, and an arrow `k₀ → k₀ + Q` from a point of the Fermi surface, chosen so that `k₀ + Q` lies as close to the Fermi surface as possible. Where the two surfaces overlap, `Q` nests them.
+- `bands` : the band indices to draw (default: all). Bands degenerate with the previous one (e.g. spin) are drawn once.
+- `color`, `lw`, `ls`, `label` : style of the Fermi surface and its legend entry.
+- `nest_color` : colour of the translated surface and of the arrow.
+- `zone` : whether to draw the first-BZ boundary. `clip` : whether to hide the contours outside it.
+- `npix` : grid points per side.
+
+"""
+    function Plot_FS(uc::UnitCell{2}, mu::Real ; kwargs...)
+        plt     =   Plots.plot(aspect_ratio = 1, grid = false, framestyle = :box)
+        return Plot_FS!(plt, uc, mu ; kwargs...)
+    end
+
+    function Plot_FS!(plt, uc::UnitCell{2}, mu::Real ; Q::Union{Nothing, AbstractVector{<:Real}} = nothing, bands = nothing,
+                      color = :royalblue, lw::Real = 2, ls::Symbol = :solid, label = "",
+                      nest_color = :crimson, zone::Bool = true, clip::Bool = true, npix::Int64 = 241)
+
+        @assert length(uc.primitives) == 2 && length(uc.primitives[1]) == 2 "Fermi surface plots only work for 2d unit cells"
+        energy      =   BandFunction(uc)
+        Gs          =   ZoneVectors(uc)
+        boundary    =   FirstBZBoundary(uc)
+        box         =   1.08 * maximum(norm, boundary)
+        ks          =   collect(range(-box, box, length = npix))
+        dk          =   step(range(-box, box, length = npix))
+        inside      =   [InZone([kx, ky], Gs ; tol = dk) for ky in ks, kx in ks]
+
+        ##### one matrix per band, rows = ky (the convention of contour)
+        band_index  =   something(bands, 1:length(energy(zeros(2))))
+        function band_grids(shift)
+            grid    =   [energy([kx, ky] .- shift) for ky in ks, kx in ks]
+            per     =   [getindex.(grid, b) for b in band_index]
+            keep    =   [i == 1 || maximum(abs.(per[i] .- per[i - 1])) > 1e-8 for i in eachindex(per)]
+            return per[keep]
+        end
+        masked(E)   =   clip ? ifelse.(inside, E, NaN) : E
+
+        ##### estimated distance from k to the Fermi surface, |ε - μ| / |∇ε|, over the drawn bands
+        function distance(k)
+            h   =   dk / 2
+            e0, ex1, ex2, ey1, ey2  =   (energy(k .+ s)[band_index] for s in ([0, 0], [h, 0], [-h, 0], [0, h], [0, -h]))
+            return minimum(@. abs(e0 - mu) / max(hypot(ex1 - ex2, ey1 - ey2) / (2h), 1e-12))
+        end
+
+        Es  =   band_grids(zeros(2))
+        for E in Es
+            contour!(plt, ks, ks, masked(E) ; levels = [Float64(mu)], color = color, lw = lw, ls = ls, colorbar = false, label = "")
+        end
+        label == "" || Plots.plot!(plt, [NaN], [NaN] ; color = color, lw = lw, ls = ls, label = label)
+
+        if !isnothing(Q)
+            Q   =   Float64.(collect(Q))
+            for E in band_grids(Q)
+                contour!(plt, ks, ks, masked(E) ; levels = [Float64(mu)], color = nest_color, lw = lw, ls = :dash, colorbar = false, label = "")
+            end
+            Plots.plot!(plt, [NaN], [NaN] ; color = nest_color, lw = lw, ls = :dash, label = L"FS $+\, Q$")
+
+            ##### The arrow k0 → k0 + S, with S = Q + G for a small reciprocal lattice vector G (equivalent to Q), so that
+            ##### both ends lie in the zone: nesting often joins opposite sides of the zone only up to a G.
+            b1, b2  =   GetRLVs(uc)
+            shifts  =   [(Q .+ i * b1 .+ j * b2, i == j == 0) for i in -1:1 for j in -1:1]
+            ##### candidates: k0 within a grid step of the Fermi surface, and the distance of k0 + S from it
+            candidates  =   Tuple{Vector{Float64}, Vector{Float64}, Bool, Float64}[]
+            for ix in 2:npix-1, iy in 2:npix-1
+                inside[iy, ix] || continue
+                d   =   minimum(abs(E[iy, ix] - mu) / max(hypot(E[iy, ix+1] - E[iy, ix-1], E[iy+1, ix] - E[iy-1, ix]) / (2 * dk), 1e-12) for E in Es)
+                d < dk || continue
+                k   =   [ks[ix], ks[iy]]
+                for (S, bare) in shifts
+                    InZone(k .+ S, Gs) && push!(candidates, (k, S, bare, distance(k .+ S)))
+                end
+            end
+            ##### k0 + S on the Fermi surface too if possible, taking the arrow whose midpoint is farthest from the surface
+            ##### (so it does not run along it) and S = Q on a tie; else the closest miss. With no Fermi surface to start
+            ##### from (e.g. Dirac points), Q is drawn from Γ.
+            nested  =   filter(c -> c[4] < dk, candidates)
+            k0, S, bare =   if !isempty(nested)
+                                argmax(c -> (distance(c[1] .+ c[2] / 2), c[3]), nested)[1:3]
+                            elseif !isempty(candidates)
+                                argmin(c -> (c[4], !c[3]), candidates)[1:3]
+                            else
+                                zeros(2), Q, true
+                            end
+            ##### Q = 0 (up to a reciprocal lattice vector) has no arrow to draw
+            if minimum(norm(first(s)) for s in shifts) > dk
+                Plots.plot!(plt, [k0[1], k0[1] + S[1]], [k0[2], k0[2] + S[2]] ; arrow = true, color = nest_color, lw = lw,
+                            label = bare ? L"Q" : L"Q + G")
+            end
+        end
+
+        zone && Plots.plot!(plt, first.(boundary), last.(boundary) ; color = :black, lw = 1, label = "")
+        Plots.plot!(plt ; aspect_ratio = 1, xlims = (-box, box), ylims = (-box, box), xlabel = L"k_x", ylabel = L"k_y")
 
         return plt
     end

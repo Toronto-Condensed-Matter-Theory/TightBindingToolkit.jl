@@ -102,6 +102,40 @@ using Test
         @test length(UC.bonds) > 0
     end
 
+    @testset "Fermi surface plots" begin
+        SpinVec = SpinMats(1//2)
+        function nn_cell(primitives)
+            UC = UnitCell(primitives, 2, 2)
+            AddBasisSite!(UC, [0.0, 0.0])
+            t1 = Param(-1.0, 2)
+            AddIsotropicBonds!(t1, UC, 1.0, SpinVec[4], "t1")
+            CreateUnitCell!(UC, [t1])
+            return UC
+        end
+        square   = nn_cell([[1.0, 0.0], [0.0, 1.0]])
+        triangle = nn_cell([[1.0, 0.0], [0.5, sqrt(3)/2]])
+
+        # the first BZ of the square lattice is the square |k_x|, |k_y| <= π
+        zone = FirstBZBoundary(square)
+        @test maximum(k -> maximum(abs, k), zone) ≈ π
+        @test minimum(k -> maximum(abs, k), zone) ≈ π
+
+        # half-filled square lattice, nested by (π, π)
+        p = Plot_FS(square, 0.0; Q = [π, π], label = "n = 1/2")
+        @test length(p.series_list) > 0
+        @test Plot_FS!(p, square, -1.0; color = :green) === p
+
+        # non-orthogonal cell
+        @test length(Plot_FS(triangle, -1.0).series_list) > 0
+
+        # the BZ-grid method with a single Fermi level
+        bz = BZ([24, 24])
+        FillBZ!(bz, square)
+        H = Hamiltonian(square, bz)
+        DiagonalizeHamiltonian!(H; verbose = false)
+        @test length(Plot_FS(H, bz, [0.0], [1]).series_list) > 0
+    end
+
     include("test_lattice.jl")
 
 end
