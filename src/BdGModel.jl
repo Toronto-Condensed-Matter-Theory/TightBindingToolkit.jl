@@ -111,7 +111,13 @@ GetMu!(M::BdGModel ;  tol::Float64=0.001)
 Function to get the correct chemical potential given a filling.
 """
     function GetMu!(M::BdGModel ;  guess::Float64 = 0.0, mu_tol::Float64 = 0.001, filling_tol::Float64 = 1e-6)
-        M.mu    =   BinarySearch(M.filling, Tuple(2*collect(M.Ham.bandwidth)), FindFilling, (M,) ; initial = guess, x_tol = mu_tol, target_tol = filling_tol)
+        ##### The BdG bands are built with the on-site field μ' stored in uc_hop.fields (last component, the identity),
+        ##### and |E| ≥ |ε - μ'| for every normal-state level ε. So μ, which lies among the ε, is within max|E| of the fields.
+        ##### (Searching 2 .* bandwidth, centred on zero, misses μ once the Hamiltonian carries a previous μ' far from zero.)
+        fields  =   getindex.(M.uc_hop.fields, length(M.uc_hop.fields[begin]))
+        width   =   maximum(abs, M.Ham.bandwidth) + 1.0 + 40 * M.T
+        window  =   (minimum(fields) - width, maximum(fields) + width)
+        M.mu    =   BinarySearch(M.filling, window, FindFilling, (M,) ; initial = guess, x_tol = mu_tol, target_tol = filling_tol)
         @info "Found chemical potential μ = $(M.mu) for given filling = $(M.filling)."
 
     end

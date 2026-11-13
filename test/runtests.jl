@@ -137,6 +137,7 @@ using Test
     end
 
     include("test_lattice.jl")
+    include("test_filling.jl")
 
 end
 # Test change

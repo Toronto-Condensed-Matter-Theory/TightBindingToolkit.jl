@@ -83,7 +83,11 @@ Function to get chemical potential for a given `Model`, within a tolerance.
             energies  =   sort(reduce(vcat, M.Ham.bands))
             M.mu      =   (energies[floor(Int64, length(energies)*M.filling)] + energies[floor(Int64, length(energies)*M.filling)+1])/2
         else
-            M.mu      =   BinarySearch(M.filling, 10 .* M.Ham.bandwidth, FindFilling, (M.Ham.bands, M.T, M.stat) ; initial = guess, x_tol=mu_tol, target_tol = filling_tol)
+            ##### μ lies within the band range (plus a thermal margin). Scaling the band edges instead (10 .* bandwidth)
+            ##### misses μ when every band lies on one side of zero, and then fills every level.
+            margin    =   1.0 + 40 * M.T
+            window    =   (M.Ham.bandwidth[1] - margin, M.Ham.bandwidth[2] + margin)
+            M.mu      =   BinarySearch(M.filling, window, FindFilling, (M.Ham.bands, M.T, M.stat) ; initial = guess, x_tol=mu_tol, target_tol = filling_tol)
             @info "Found chemical potential μ = $(M.mu) for given filling = $(M.filling)."
         end
     end
