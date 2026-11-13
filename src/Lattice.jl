@@ -106,7 +106,7 @@ Fills all the sites, positions, and fields of the lattice using information in t
                 lattice.positions[site]     =   round.(position, digits = precision)
                 site        =   site + 1
 
-                push!(lattice.fields, lattice.uc.fields[b])
+                push!(lattice.fields, copy(lattice.uc.fields[b]))    ##### copy, so that sites do not share (alias) one field vector
 
             end
         end
@@ -125,7 +125,7 @@ Returns the effective real-space offset of `site` given a lattice size `L`, and 
 """
     function ApplyBCToSite(site::Vector{Int64}, L::Vector{Int64}, BC::Vector{ComplexF64}) :: Vector{Int64}
 
-        BCStrength  =   Bool.(abs.(BC))     ##### strength of the boundary condition refers to it being 1 (for a periodic system with arbitrary phase), or 0 for open systems.
+        BCStrength  =   abs.(BC) .> 1e-8     ##### strength of the boundary condition refers to it being 1 (for a periodic system with arbitrary phase), or 0 for open systems. Tolerance since e.g. abs(cis(2π/3)) = 0.9999999999999999.
         BCPhase     =   angle.(BC)
 
         LEffective  =   L .* BCStrength + .!(BCStrength)    ##### Leff_i = L if system is closed, or 1 if system is open along that dimension
@@ -155,6 +155,10 @@ FillBonds!(lattice::Lattice{T} ; null_dist::Float64 = -1.0, null_label::String =
 ```
 Fills all the bond information in the lattice using the bonds in `UnitCell`.
 
+For rank-2 (hopping) bonds, a bond that wraps around a closed boundary is multiplied by the boundary phase from `lattice.uc.BC`, see `GetBCPhase`.
+Higher-rank bonds, e.g. rank-4 interaction tensors, are stored without that phase, since each site appears there with one creation and one annihilation operator and the phases cancel.
+Note that a rank-2 *pairing* lattice (bond matrix multiplying c†c† rather than c†c) would need `conj(phase)` instead; that is not handled here.
+
 """
     function FillBonds!(lattice::Lattice{T} ; null_dist::Float64 = -1.0, null_label::String = "-" ) where {T}
 
@@ -174,7 +178,8 @@ Fills all the bond information in the lattice using the bonds in `UnitCell`.
             for bond in OutgoingBonds
 
                 targetOffset    =   ApplyBCToSite(offset + bond.offset, lattice.size, lattice.uc.BC)
-                targetPhase     =   GetBCPhase(   offset + bond.offset, lattice.size, lattice.uc.BC)
+                ##### Boundary phase only for rank-2 (hopping) bonds; it cancels for rank-4 interactions. A rank-2 pairing lattice would need conj(phase).
+                targetPhase     =   T == 2 ? GetBCPhase(offset + bond.offset, lattice.size, lattice.uc.BC) : one(ComplexF64)
 
                 target          =   get(lookup, (bond.target, targetOffset), 0)
 

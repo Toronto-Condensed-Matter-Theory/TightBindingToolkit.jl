@@ -61,7 +61,7 @@ module Plaqs
         PrimitiveBasis  =   (reduce(hcat, lattice.uc.primitives))
         InvBasis        =   inv(PrimitiveBasis)
 
-        BCStrength  =   Bool.(abs.(lattice.uc.BC))     ##### strength of the boundary condition refers to it being 1 (for a periodic system with arbitrary phase), or 0 for open systems.
+        BCStrength  =   abs.(lattice.uc.BC) .> 1e-8     ##### strength of the boundary condition refers to it being 1 (for a periodic system with arbitrary phase), or 0 for open systems. Tolerance since e.g. abs(cis(2π/3)) = 0.9999999999999999.
         LEffective  =   lattice.size .* BCStrength + .!(BCStrength)    ##### Leff_i = L if system is closed, or 1 if system is open along that dimension
 
         for (site, basis) in lattice.sites

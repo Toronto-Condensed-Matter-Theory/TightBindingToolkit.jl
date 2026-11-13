@@ -12,6 +12,8 @@ module LatHam
 FillHamiltonian( lattice::Lattice{2} )
 ```
 Fills the Hamiltonian matrix for a given `Lattice` object using the bonds stored in the `Lattice` object.
+The conventions match the momentum-space `FillHoppingHamiltonian`: on-site fields enter with a minus sign, `-∑ fields[site] .* OnSiteMats`,
+and on-site bonds (zero distance, target = base) are symmetrized as `(M + M')/2`, while every other bond adds `M` and its Hermitian conjugate.
 """
     function FillHamiltonian( lattice::Lattice{2} )
 
@@ -19,22 +21,28 @@ Fills the Hamiltonian matrix for a given `Lattice` object using the bonds stored
         Hamsize     = lattice.length * localDim
         Ham         = zeros( ComplexF64 , Hamsize , Hamsize )
 
+        block(s)    = localDim * (s - 1) + 1 : localDim * s
+
         for site in 1:lattice.length
             ############# On-Site terms
-            Ham[localDim * (site - 1) + 1 : localDim * (site), localDim * (site - 1) + 1 : localDim * (site)] += sum( lattice.fields[site] .* lattice.uc.OnSiteMats )
+            Ham[block(site), block(site)] -= sum( lattice.fields[site] .* lattice.uc.OnSiteMats )
 
             ############# Bond terms
-            for neighbour in 1:length(lattice.bondSites[site, :])
+            for neighbour in 1:size(lattice.bondSites, 2)
 
-                if lattice.bondSites[site , neighbour] != 0
-                    Ham[ localDim*(site-1) + 1 : localDim*(site) , localDim*(lattice.bondSites[site, neighbour]-1) + 1 : localDim*(lattice.bondSites[site, neighbour]) ] += lattice.bondMats[site, neighbour]
-                    
-                    if lattice.bondDists[site, neighbour] > 0.0
-                        Ham[ localDim*(lattice.bondSites[site, neighbour]-1) + 1 : localDim*(lattice.bondSites[site, neighbour])  , localDim*(site-1) + 1 : localDim*(site)] += adjoint(lattice.bondMats[site, neighbour])
-                    end
+                target  =   lattice.bondSites[site, neighbour]
+                target == 0 && continue
+                mat     =   lattice.bondMats[site, neighbour]
+
+                if target == site && iszero(lattice.bondDists[site, neighbour])
+                    ##### On-site bond: symmetrized, exactly as in the momentum-space Hamiltonian.
+                    Ham[block(site), block(site)]   += (mat + mat') / 2
+                else
+                    Ham[block(site), block(target)] += mat
+                    Ham[block(target), block(site)] += mat'
                 end
-            end 
-        end 
+            end
+        end
 
         return Ham
     end

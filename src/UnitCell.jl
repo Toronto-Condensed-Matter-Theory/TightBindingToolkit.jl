@@ -153,7 +153,7 @@ Add a sublattice to the `UnitCell`  at the given real-space position, with an on
 		@assert !(position in uc.basis) "Cannot add the same basis site again!"
 		push!( uc.basis , position )
 
-		push!( uc.fields , field )
+		push!( uc.fields , copy(field) )
 
 		if length(uc.basis) == 1 ##### First sublattice being added
 			@assert adjoint.(OnSiteMatrices) == OnSiteMatrices "on-Site matrices must be Hermitian!"

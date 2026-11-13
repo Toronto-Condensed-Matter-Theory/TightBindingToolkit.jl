@@ -156,7 +156,7 @@ Modify the on-site fields in the `UnitCell`, either one at a time, or all of the
 
 """
 	function ModifyFields!(uc::UnitCell, site::Int64, newField::Vector{Float64})
-		uc.fields[site] 	=	newField
+		uc.fields[site] 	=	copy(newField)
 	end
 
 	function ModifyFields!(uc::UnitCell, newField::Vector{Float64}, dim::Int64)
@@ -165,7 +165,7 @@ Modify the on-site fields in the `UnitCell`, either one at a time, or all of the
 	end
 
 	function ModifyFields!(uc::UnitCell, newField::Vector{Vector{Float64}})
-		uc.fields 	=	newField
+		uc.fields 	=	copy.(newField)
 	end
 
 
@@ -178,7 +178,7 @@ Modify the on site field uniformly, on all sublattices. The optional argument `d
 
 """
 	function ModifyIsotropicFields!(uc::UnitCell, newField::Vector{Float64})
-		uc.fields 	= 	repeat(newField, length(uc.basis))				
+		uc.fields 	= 	[copy(newField) for _ in uc.basis]
 	end
 	
 	function ModifyIsotropicFields!(uc::UnitCell, newField::Float64, dim::Int64)

@@ -6,7 +6,7 @@ module DesignLattice
 
     using ..TightBindingToolkit.UCell: Bond, UnitCell
     using ..TightBindingToolkit.Parameters: Param, CreateUnitCell!, ModifyUnitCell!
-    using ..TightBindingToolkit.LatticeStruct: Lattice, FillLattice!
+    using ..TightBindingToolkit.LatticeStruct: Lattice, FillLattice!, FillBonds!
 
 
 @doc """
@@ -81,7 +81,7 @@ Scales a lattice bond with the given `label` and by the given `scaling`.
 """
     function ScaleLatticeBonds!(lattice::Lattice{T} , label::String , scaling::Float64) where {T}
         @assert !isnan(scaling) && !isinf(scaling) "scaling is NaN or Inf."
-        lattice.BondMats[findall( ==(label) , lattice.BondLabels )] .= scaling .* lattice.BondMats[findall( ==(label) , lattice.BondLabels )]
+        lattice.bondMats[findall( ==(label) , lattice.bondLabels )] .= scaling .* lattice.bondMats[findall( ==(label) , lattice.bondLabels )]
     
     end
 
@@ -120,11 +120,11 @@ Removes a lattice bond with the given `label`.
 """
     function RemoveLatticeBonds!(lattice::Lattice{T} , label::String ; null_dist::Float64 = -1.0, null_label::String = "-") where {T}
 
-        indices     =   findall( ==(label) , lattice.BondLabels )
+        indices     =   findall( ==(label) , lattice.bondLabels )
 
-        lattice.BondMats[indices]   .=  0.0 .* lattice.BondMats[indices]
-        lattice.BondLabels[indices] .=  Ref(null_label)
-        lattice.BondDists[indices]  .=  Ref(null_dist)    
+        lattice.bondMats[indices]   .=  0.0 .* lattice.bondMats[indices]
+        lattice.bondLabels[indices] .=  Ref(null_label)
+        lattice.bondDists[indices]  .=  Ref(null_dist)    
     end
 
 
