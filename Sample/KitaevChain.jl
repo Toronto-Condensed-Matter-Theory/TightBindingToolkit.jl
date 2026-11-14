@@ -1,7 +1,7 @@
 using Plots, LaTeXStrings, TightBindingToolkit
 
 """
-This script sets up the famous boxaev chain in 1d.
+This script sets up the famous Kitaev chain in 1d.
 """
 
 """
@@ -47,12 +47,12 @@ ModifyIsotropicFields!(UC_hop, mu, length(UC_hop.fields[begin]))
 H       =   Hamiltonian(UC_hop , UC_pair , bz)
 DiagonalizeHamiltonian!(H)
 
-boxaevModel   =   BdGModel(UC_hop , UC_pair, bz, H; T=T, mu=mu)
-SolveModel!(boxaevModel)
+kitaevModel   =   BdGModel(UC_hop , UC_pair, bz, H; T=T, mu=mu)
+SolveModel!(kitaevModel)
 
 kPoints = [bz.HighSymPoints["G"], bz.HighSymPoints["M1"]]
 
-Plot_Band_Structure!(boxaevModel, kPoints ; labels = [L"$\Gamma$", L"$M_1$"])
+Plot_Band_Structure!(kitaevModel, kPoints ; labels = [L"$\Gamma$", L"$M_1$"])
 
 
 

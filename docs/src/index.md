@@ -1,12 +1,12 @@
-# TightBindingToobox.jl
+# TightBindingToolkit.jl
 
 TightBindingToolkit.jl is a Julia package meant for constructing, and obtaining useful properties of generic tight-binding models. It supports any lattice structure, with any user-defined bonds on that lattice. It also has support for any spin of the particle hopping on the lattice.
 
 Currently supported :
-* Custom Unit Cell Construction. (v1.3) : now also supports construction in dimensions upto d=3.
+* Custom Unit Cell Construction. (v1.3) : now also supports construction in dimensions up to d=3.
     |![Alt text](./assets/Honeycomb_123NN_UC.png)|
     |*Honeycomb Model with 1st, 2nd and 3rd neighbour hoppings.*|
-* Corresponding Brillouin Zone Construction. (v1.3) : now also supports construction in dimensions upto d=3.
+* Corresponding Brillouin Zone Construction. (v1.3) : now also supports construction in dimensions up to d=3.
 * Hamiltonian, given a Unit Cell and a Brillouin Zone. (v1.3) : now also support BdG Hamiltonians.
 * Diagonalizing the Hamiltonian in momentum space to get band structures and wavefunctions.
     |![Alt text](./assets/Triangle_123NN_bandStructure.png)|
@@ -19,7 +19,7 @@ Currently supported :
 * Filling the model at given chemical potential, and calculating gaps. (v1.3) : also supported for BdG systems.
     |![Alt text](./assets/KitaevChain.png)|
     |:--:| 
-    |*Band structure of the boxaev Chain in 1-d.*|
+    |*Band structure of the Kitaev chain in 1-d.*|
 * Fermi surfaces of systems
     |![Alt text](./assets/Triangle_123NN_FS.png)|
     |:--:| 
