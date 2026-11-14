@@ -139,6 +139,7 @@ using Test
     include("test_hamiltonian.jl")
     include("test_lattice.jl")
     include("test_filling.jl")
+    include("test_susceptibility.jl")
 
 end
 # Test change

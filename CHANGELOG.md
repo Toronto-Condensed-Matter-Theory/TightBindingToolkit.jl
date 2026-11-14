@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- `FindReducedChi` and `FindChi` used the wrong momentum on even k-grids. Their default Γ index, `(gridSize .+ 1) .÷ 2`, holds only for odd grids; the Monkhorst grid puts Γ at `N/2 + 1` when `N` is even, so every `Q` was shifted by one grid point. The default now looks Γ up on the grid (`GammaIndex(bz)`). Odd grids, including the usual `6n + 3`, are unchanged. `test/test_susceptibility.jl` checks both against the Lindhard sum.
+
 ## 3.3.0
 
 ### Added

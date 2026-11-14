@@ -115,14 +115,22 @@ function to calculate ``(nF(E(k)) - nF(E(k+Q))) / (Ω + i * η - (E(k+Q) - E(k))
     end 
 
 
+##### Grid index of the Γ point. The Monkhorst grid puts Γ at N/2 + 1 for even N and (N + 1)/2 for odd N,
+##### and nowhere at all for a shifted or twisted grid, so it is looked up rather than assumed.
+    function GammaIndex(bz::BZ) :: Vector{Int64}
+        return GetQIndex(zeros(Float64, length(bz.gridSize)), bz ; nearest = false)
+    end
+
+
 @doc """
 ```julia
-FindReducedChi(Q::Vector{Float64}, Omega::Float64 , M::Model; a::Int64=3, b::Int64=3, eta::Float64=1e-2) --> ComplexF64
+FindReducedChi(Omega::Float64, Q::Vector{Float64}, M::Model; a::Int64=3, b::Int64=3, eta::Float64=1e-2, Gamma_index::Vector{Int64}=GammaIndex(M.bz)) --> ComplexF64
 ```
 function to calculate susceptibility at a fixed Ω=`Omega`, and `Q`, and along a fixed direction given by `a` and `b`.
+`Q` must lie on the grid of `M.bz`, and `Gamma_index` is the grid index of the Γ point, found from the grid by default.
 
 """
-    function FindReducedChi(Omega::Float64, Q::Vector{Float64}, M::Model; a::Int64=3, b::Int64=3, eta::Float64=1e-2, Gamma_index::Vector{Int64} = ((M.bz.gridSize .+ 1) .÷ 2)) ::ComplexF64
+    function FindReducedChi(Omega::Float64, Q::Vector{Float64}, M::Model; a::Int64=3, b::Int64=3, eta::Float64=1e-2, Gamma_index::Vector{Int64} = GammaIndex(M.bz)) ::ComplexF64
 
         expQ    =   diagm(exp.(-im .* dot.(Ref(Q) , M.uc.basis)))
         Qa      =   kron(expQ , M.uc.OnSiteMats[a])
@@ -147,7 +155,7 @@ function to calculate susceptibility at a fixed Ω=`Omega`, and `Q`, and along a
     end
 
 
-    function FindChi(Omega::Float64, Q::Vector{Float64}, M::Model; a::Int64=3, b::Int64=3, eta::Float64=1e-2, Gamma_index::Vector{Int64} = ((M.bz.gridSize .+ 1) .÷ 2)) ::Matrix{ComplexF64}
+    function FindChi(Omega::Float64, Q::Vector{Float64}, M::Model; a::Int64=3, b::Int64=3, eta::Float64=1e-2, Gamma_index::Vector{Int64} = GammaIndex(M.bz)) ::Matrix{ComplexF64}
 
         Q_index =   GetQIndex(Q, M.bz) .- Gamma_index
         nF      =   nF_factor(Q_index, Omega , M; eta=eta)
@@ -200,8 +208,7 @@ function to calculate susceptibility at a all given Ω=`Omegas`, but for all `Q`
 
 """
     function FillChis!(chi::Susceptibility, M::Model; a::Int64=3, b::Int64=3, reduce::Bool = true)
-        Gamma_index = GetQIndex(zeros(Float64, length(M.uc.primitives)), M.bz ; nearest = false)    ##### The index of the Gamma point in the BZ grid.
-        @assert !isempty(Gamma_index) "The Gamma point needs to be in the BZ grid for this calculation to work!" 
+        GammaIndex(M.bz)    ##### throws early if the Γ point is not on the BZ grid
 
         if reduce   ##### Calculate only the reduced susceptibility
             chis    =   FindReducedChi.(chi.Omegas, reshape(chi.Qs, 1, length(chi.Qs)), Ref(M), ; a=a, b=b, eta=chi.Spread)
