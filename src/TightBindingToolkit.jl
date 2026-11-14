@@ -58,7 +58,7 @@ export GetRLVs , BZ , Monkhorst , FillBZ! , ReduceQ , GetQIndex , CombinedIndexP
 ##### module to define a Hamiltonian structure and solving for some of its properties.
 include("Hamiltonian.jl")
 using .Hams
-export Hamiltonian , FillHoppingHamiltonian, FillPairingHamiltonian, FillHamiltonian , DiagonalizeHamiltonian! , DOS, ModifyHamiltonianField!, IsBandGapped, GetVelocity!
+export Hamiltonian , FillHoppingHamiltonian, FillPairingHamiltonian, FillHamiltonian , FillHamiltonian!, FourierHamiltonian, DiagonalizeHamiltonian! , DOS, ModifyHamiltonianField!, IsBandGapped, GetVelocity!
 
 include("LatticeHamiltonian.jl")
 using .LatHam

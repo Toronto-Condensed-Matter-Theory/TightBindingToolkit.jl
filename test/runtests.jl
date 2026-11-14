@@ -136,6 +136,7 @@ using Test
         @test length(Plot_FS(H, bz, [0.0], [1]).series_list) > 0
     end
 
+    include("test_hamiltonian.jl")
     include("test_lattice.jl")
     include("test_filling.jl")
 
