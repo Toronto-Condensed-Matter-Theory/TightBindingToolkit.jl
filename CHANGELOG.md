@@ -1,6 +1,13 @@
 # Changelog
 
-## Unreleased
+## 3.4.0
+
+### Changed
+
+- `FillHamiltonian(F::FourierHamiltonian, bz)`, and so `Hamiltonian(uc, bz)` and the BdG `Hamiltonian`, evaluate H(k) on a uniform momentum grid (any `FillBZ!` grid, shifted or with twisted boundary conditions) with one backward FFT per matrix element instead of summing the Fourier terms at every k. Other momentum sets use the term-by-term sum. `FourierHamiltonian` now also stores the integer `offsets` and the `primitives`; its construction merges the terms in a dense array instead of a `Dict`.
+- `GetGk!(::Model)` computes G(k) = conj(U) n Uᵀ directly, without dense diagonal matrices.
+- `FFTArrayofMatrix` transforms the matrices packed in one array, without the two TensorCast copies.
+- One MeanFieldToolkit Hartree-Fock iteration on the twisted-WSe2 √3 cell (18 × 18, 4545 bonds) takes about 100 ms at a 27 × 27 grid instead of 150 ms, and 38 ms instead of 56 ms at 15 × 15. About half of what remains is the LAPACK diagonalization. Results agree with 3.3 to rounding.
 
 ### Fixed
 

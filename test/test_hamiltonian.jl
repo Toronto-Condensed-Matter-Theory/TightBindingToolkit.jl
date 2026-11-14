@@ -1,7 +1,7 @@
 ##### The Bloch Hamiltonian: FillHoppingHamiltonian, FillPairingHamiltonian, FillHamiltonian and FourierHamiltonian
 ##### must all agree with the block-by-block construction below (the v3.2 implementation).
 
-using Random
+using Random, FFTW
 
 function reference_hopping(uc, k)
     L       =   uc.localDim
@@ -112,6 +112,48 @@ end
         HB  =   Hamiltonian(uc, up, bz)
         @test HB.is_BdG
         @test all(HB.H[i] ≈ reference_bdg(uc, up, bz.ks[i]) for i in eachindex(bz.ks))
+    end
+
+    @testset "BZ grids: FFT and fallback" begin
+        F   =   FourierHamiltonian(uc)
+        FB  =   FourierHamiltonian(uc, up)
+        for (grid, shift) in (([6, 9], [0, 0]), ([5, 4], [1, 2]), ([1, 7], [0, 3]))
+            bz  =   BZ(grid)
+            FillBZ!(bz, uc ; shift = shift)
+            @test !isnothing(TightBindingToolkit.Hams.GridShift(F, bz.ks))
+            Hs  =   FillHamiltonian(F, bz)
+            @test size(Hs) == size(bz.ks)
+            @test maximum(maximum(abs.(Hs[i] - reference_hopping(uc, bz.ks[i]))) for i in eachindex(bz.ks)) < 1e-12
+            HBs =   FillHamiltonian(FB, bz)
+            @test maximum(maximum(abs.(HBs[i] - reference_bdg(uc, up, bz.ks[i]))) for i in eachindex(bz.ks)) < 1e-12
+        end
+        ##### twisted boundary conditions shift the grid by a fraction of a cell
+        tw      =   deepcopy(uc)
+        tw.BC   =   [cis(0.3), cis(-1.1)]
+        bz      =   BZ([6, 6])
+        FillBZ!(bz, tw)
+        @test !isnothing(TightBindingToolkit.Hams.GridShift(F, bz.ks))
+        @test all(FillHamiltonian(F, bz)[i] ≈ reference_hopping(uc, bz.ks[i]) for i in eachindex(bz.ks))
+        ##### momenta that are not a uniform grid take the term-by-term path
+        bz.ks   =   reshape(bz.ks[randperm(rng, length(bz.ks))], size(bz.ks))
+        @test isnothing(TightBindingToolkit.Hams.GridShift(F, bz.ks))
+        @test all(FillHamiltonian(F, bz)[i] ≈ reference_hopping(uc, bz.ks[i]) for i in eachindex(bz.ks))
+    end
+
+    @testset "Green's functions" begin
+        bz  =   BZ([6, 5])
+        FillBZ!(bz, uc)
+        H   =   Hamiltonian(uc, bz)
+        DiagonalizeHamiltonian!(H ; verbose = false)
+        M   =   Model(uc, bz, H ; T = 0.3, filling = 0.4)
+        SolveModel!(M ; verbose = false)
+        f(Es)   =   TightBindingToolkit.Useful.DistFunction(Es ; T = M.T, mu = M.mu, stat = M.stat)
+        @test all(M.Gk[i] ≈ transpose(H.states[i] * diagm(f(H.bands[i])) * H.states[i]') for i in eachindex(M.Gk))
+        Gr  =   TightBindingToolkit.Useful.FFTArrayofMatrix(M.Gk)
+        @test size(Gr) == size(M.Gk)
+        for i in 1:4, j in 1:4
+            @test getindex.(Gr, i, j) ≈ fft(getindex.(M.Gk, i, j)) ./ length(M.Gk)
+        end
     end
 
     @testset "invalid bonds" begin

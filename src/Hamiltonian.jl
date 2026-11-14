@@ -7,7 +7,7 @@ module Hams
     using ..TightBindingToolkit.DesignUCell: ModifyFields!, ModifyIsotropicFields!
     using ..TightBindingToolkit.BZone:BZ
 
-    using LinearAlgebra, TensorCast, Logging
+    using LinearAlgebra, TensorCast, Logging, FFTW
 
     ##### k-independent parts of the Hamiltonian, computed once instead of at every k-point.
     BondDisplacements(uc::UnitCell{2}) = Vector{Float64}[sum(bond.offset .* uc.primitives) for bond in uc.bonds]
@@ -141,11 +141,14 @@ H(k) = H_0 + \\sum_n e^{i k \\cdot d_n} h_n \\, |r_n\\rangle\\langle c_n| ,
 ```
 with every bond of a `UnitCell` (and its hermitian conjugate) merged into one entry per (row, column, displacement).
 Build it once and evaluate it at many momenta with `FillHamiltonian(F, k)` or `FillHamiltonian!(H, F, k)`: each phase is computed once per distinct displacement instead of once per bond.
+On a uniform momentum grid, `FillHamiltonian(F, bz)` evaluates every k-point at once with fast Fourier transforms.
 It is a snapshot: rebuild it after the bonds or fields of the unit cell change.
 
 # Attributes
 - `H0            :: Matrix{ComplexF64}`: the k-independent part (on-site fields and bonds within a site).
 - `displacements :: Matrix{Float64}`: the distinct bond displacements, one per column.
+- `offsets       :: Matrix{Int64}`: the same displacements in units of the primitive vectors.
+- `primitives    :: Vector{Vector{Float64}}`: the primitive vectors of the unit cell.
 - `rows, cols    :: Vector{Int64}`: matrix entry of each term.
 - `disp          :: Vector{Int64}`: column of `displacements` of each term.
 - `vals          :: Vector{ComplexF64}`: amplitude of each term.
@@ -159,40 +162,94 @@ FourierHamiltonian(uc_hop::UnitCell, uc_pair::UnitCell) --> BdG Hamiltonian, as 
     struct FourierHamiltonian
         H0              ::  Matrix{ComplexF64}
         displacements   ::  Matrix{Float64}
+        offsets         ::  Matrix{Int64}
+        primitives      ::  Vector{Vector{Float64}}
         rows            ::  Vector{Int64}
         cols            ::  Vector{Int64}
         disp            ::  Vector{Int64}
         vals            ::  Vector{ComplexF64}
     end
 
-    ##### Accumulates terms keyed by (row, col, integer offset), so repeated bonds collapse into one entry.
-    struct FourierTerms
+    ##### Collects the terms (row, col, offset index, value); FourierHamiltonian(::FourierTerms, ...) merges repeated
+    ##### (row, col, offset) into one entry. The offsets of the last two lookups are cached: every element of a bond
+    ##### (and of its conjugate) shares them.
+    mutable struct FourierTerms
         H0      ::  Matrix{ComplexF64}
         offsets ::  Dict{Vector{Int64}, Int64}
-        terms   ::  Dict{Tuple{Int64, Int64, Int64}, ComplexF64}
+        rows    ::  Vector{Int64}
+        cols    ::  Vector{Int64}
+        disp    ::  Vector{Int64}
+        vals    ::  Vector{ComplexF64}
+        recent  ::  Vector{Vector{Int64}}
+        recentd ::  Vector{Int64}
     end
-    FourierTerms(dims::Int) = FourierTerms(zeros(ComplexF64, dims, dims), Dict{Vector{Int64}, Int64}(), Dict{Tuple{Int64, Int64, Int64}, ComplexF64}())
+    FourierTerms(dims::Int) = FourierTerms(zeros(ComplexF64, dims, dims), Dict{Vector{Int64}, Int64}(), Int64[], Int64[], Int64[], ComplexF64[], [Int64[], Int64[]], [0, 0])
+
+    function OffsetIndex!(F::FourierTerms, offset::Vector{Int64}) :: Int64
+        F.recent[1] == offset && return F.recentd[1]
+        F.recent[2] == offset && return F.recentd[2]
+        d   =   get(F.offsets, offset, 0)
+        if d == 0
+            d   =   length(F.offsets) + 1
+            F.offsets[copy(offset)]     =   d       ##### a copy: the key must not alias a bond offset
+        end
+        F.recent[2], F.recentd[2]   =   F.recent[1], F.recentd[1]
+        F.recent[1], F.recentd[1]   =   offset, d
+        return d
+    end
 
     function AddTerm!(F::FourierTerms, row::Int, col::Int, offset::Vector{Int64}, val::ComplexF64)
         iszero(val) && return F
         if iszero(offset)
             F.H0[row, col]  +=  val
         else
-            d   =   get!(F.offsets, offset, length(F.offsets) + 1)
-            key =   (row, col, d)
-            F.terms[key]    =   get(F.terms, key, zero(ComplexF64)) + val
+            push!(F.rows, row); push!(F.cols, col); push!(F.disp, OffsetIndex!(F, offset)); push!(F.vals, val)
         end
         return F
+    end
+
+    ##### The terms merged per (row, col, displacement), ordered by displacement, then column, then row (the order in
+    ##### which evaluation walks memory). Dense accumulation when the (row, col, displacement) array is small, sorting otherwise.
+    function MergeTerms(F::FourierTerms)
+        dims    =   size(F.H0, 1)
+        nDisp   =   length(F.offsets)
+        key(t)  =   F.rows[t] + dims * ((F.cols[t] - 1) + dims * (F.disp[t] - 1))
+        if dims^2 * nDisp <= 2^22
+            A       =   zeros(ComplexF64, dims^2 * nDisp)
+            seen    =   falses(dims^2 * nDisp)
+            for t in eachindex(F.vals)
+                A[key(t)]       +=  F.vals[t]
+                seen[key(t)]    =   true
+            end
+            keys_   =   findall(seen)
+            vals    =   A[keys_]
+        else
+            order   =   sortperm([key(t) for t in eachindex(F.vals)])
+            keys_   =   Int64[]
+            vals    =   ComplexF64[]
+            for t in order
+                if !isempty(keys_) && keys_[end] == key(t)
+                    vals[end]   +=  F.vals[t]
+                else
+                    push!(keys_, key(t)); push!(vals, F.vals[t])
+                end
+            end
+        end
+        rows    =   [mod(k - 1, dims) + 1 for k in keys_]
+        cols    =   [mod((k - 1) ÷ dims, dims) + 1 for k in keys_]
+        disp    =   [(k - 1) ÷ dims^2 + 1 for k in keys_]
+        return rows, cols, disp, vals
     end
 
     ##### Iterates over the hopping terms of `uc` exactly as FillHoppingHamiltonian adds them: f(row, col, offset, value).
     function ForEachHopping(f::Function, uc::UnitCell{2})
         CheckBonds(uc)
         L   =   uc.localDim
+        zero_offset     =   zeros(Int64, length(uc.primitives))
         for (site, block) in enumerate(OnSiteBlocks(uc))
             o   =   L * (site - 1)
             for j in 1:L, i in 1:L
-                f(o + i, o + j, zeros(Int64, length(uc.primitives)), -block[i, j])
+                f(o + i, o + j, zero_offset, -block[i, j])
             end
         end
         for bond in uc.bonds
@@ -207,6 +264,8 @@ FourierHamiltonian(uc_hop::UnitCell, uc_pair::UnitCell) --> BdG Hamiltonian, as 
                 minus   =   -bond.offset
                 for j in 1:L, i in 1:L
                     f(o1 + i, o2 + j, bond.offset, M[i, j])
+                end
+                for j in 1:L, i in 1:L
                     f(o2 + j, o1 + i, minus, conj(M[i, j]))
                 end
             end
@@ -230,12 +289,13 @@ FourierHamiltonian(uc_hop::UnitCell, uc_pair::UnitCell) --> BdG Hamiltonian, as 
         nDisp   =   length(F.offsets)
         D       =   length(primitives)
         displacements   =   zeros(Float64, D, nDisp)
+        offsets         =   zeros(Int64, D, nDisp)
         for (offset, d) in F.offsets
             displacements[:, d]     .=  sum(offset .* primitives)
+            offsets[:, d]           .=  offset
         end
-        ##### Sorted by displacement, then column, so that evaluation walks memory in order.
-        keys_   =   sort!(collect(keys(F.terms)), by = t -> (t[3], t[2], t[1]))
-        return FourierHamiltonian(F.H0, displacements, getindex.(keys_, 1), getindex.(keys_, 2), getindex.(keys_, 3), [F.terms[t] for t in keys_])
+        rows, cols, disp, vals  =   MergeTerms(F)
+        return FourierHamiltonian(F.H0, displacements, offsets, deepcopy(primitives), rows, cols, disp, vals)
     end
 
     function FourierHamiltonian(uc::UnitCell{2})
@@ -249,15 +309,20 @@ FourierHamiltonian(uc_hop::UnitCell, uc_pair::UnitCell) --> BdG Hamiltonian, as 
         @assert IsSameUnitCell(uc_hop, uc_pair) "Inconsistent unit cells for hopping and pairing!"
         dims    =   uc_hop.localDim * length(uc_hop.basis)
         F       =   FourierTerms(2 * dims)
+        ##### -o for the last offset seen, so the elements of one bond share a single negated vector
+        memo        =   [Int64[], Int64[]]
+        negated(o)  =   (o === memo[1] || (memo[1] = o; memo[2] = -o); memo[2])
         ForEachHopping(uc_hop) do r, c, o, v
+            mo  =   negated(o)
             AddTerm!(F, r, c, o, ComplexF64(v))                     ##### T(k)
-            AddTerm!(F, dims + c, dims + r, -o, -ComplexF64(v))     ##### -T(-k)ᵀ
+            AddTerm!(F, dims + c, dims + r, mo, -ComplexF64(v))     ##### -T(-k)ᵀ
         end
         ForEachPairing(uc_pair) do r, c, o, v
             v   =   ComplexF64(v)
+            mo  =   negated(o)
             AddTerm!(F, r, dims + c, o, v)                          ##### Δ(k)
-            AddTerm!(F, c, dims + r, -o, -v)                        ##### -Δ(-k)ᵀ
-            AddTerm!(F, dims + c, r, -o, conj(v))                   ##### hermitian conjugates of the two above
+            AddTerm!(F, c, dims + r, mo, -v)                        ##### -Δ(-k)ᵀ
+            AddTerm!(F, dims + c, r, mo, conj(v))                   ##### hermitian conjugates of the two above
             AddTerm!(F, dims + r, c, o, -conj(v))
         end
         return FourierHamiltonian(F, uc_hop.primitives)
@@ -333,7 +398,56 @@ Returns the full Hamiltonian at all momentum points in `BZ` (or at the single mo
         return Hk
     end
 
+    ##### If the momenta form a uniform grid, k_I . aₑ / 2π = αₑ + (Iₑ - 1) / Nₑ (mod 1) along every primitive vector aₑ,
+    ##### returns α; otherwise nothing.
+    function GridShift(F::FourierHamiltonian, ks::AbstractArray{<:AbstractVector{<:Real}}) :: Union{Nothing, Vector{Float64}}
+        D   =   length(F.primitives)
+        (ndims(ks) == D && !isempty(ks) && all(k -> length(k) == D, ks)) || return nothing
+        N   =   size(ks)
+        α   =   [SmallDot(first(ks), a) / (2 * pi) for a in F.primitives]
+        for I in CartesianIndices(ks), e in 1:D
+            x   =   SmallDot(ks[I], F.primitives[e]) / (2 * pi) - α[e] - (I[e] - 1) / N[e]
+            abs(x - round(x)) < 1e-9 || return nothing
+        end
+        return α
+    end
+
+    ##### H(k) on a uniform grid: H(k_I) = H0 + Σₙ e^{2πi Σₑ nₑ (αₑ + (Iₑ - 1) / Nₑ)} Hₙ, a backward FFT of the terms placed at n mod N.
+    function FillHamiltonianFFT(F::FourierHamiltonian, ks::AbstractArray, α::Vector{Float64})
+        dims    =   size(F.H0, 1)
+        N       =   size(ks)
+        D       =   length(N)
+        A       =   zeros(ComplexF64, dims, dims, N...)
+        cells   =   LinearIndices(N)
+        nDisp   =   size(F.offsets, 2)
+        base    =   Vector{Int64}(undef, nDisp)     ##### linear index of element (0, 0) of each displacement's grid cell in A
+        phase   =   Vector{ComplexF64}(undef, nDisp)
+        for d in 1:nDisp
+            n           =   view(F.offsets, :, d)
+            base[d]     =   (cells[CartesianIndex(ntuple(e -> mod(n[e], N[e]) + 1, D))] - 1) * dims^2
+            phase[d]    =   cispi(2 * sum(n[e] * α[e] for e in 1:D))
+        end
+        rows, cols, disp, vals  =   F.rows, F.cols, F.disp, F.vals
+        @inbounds for t in eachindex(vals)
+            A[base[disp[t]] + rows[t] + (cols[t] - 1) * dims]  +=  phase[disp[t]] * vals[t]
+        end
+        bfft!(A, 3 : D + 2)
+
+        Hs      =   similar(ks, Matrix{ComplexF64})
+        @inbounds for I in CartesianIndices(ks)
+            H   =   Matrix{ComplexF64}(undef, dims, dims)
+            o   =   (cells[I] - 1) * dims^2
+            for j in 1:dims, i in 1:dims
+                H[i, j]     =   A[o + i + (j - 1) * dims] + F.H0[i, j]
+            end
+            Hs[I]   =   H
+        end
+        return Hs
+    end
+
     function FillHamiltonian(F::FourierHamiltonian, bz::BZ)
+        α   =   GridShift(F, bz.ks)
+        isnothing(α) || return FillHamiltonianFFT(F, bz.ks, α)
         phases  =   Vector{ComplexF64}(undef, size(F.displacements, 2))
         return map(k -> FillHamiltonian!(similar(F.H0), F, k, phases), bz.ks)
     end

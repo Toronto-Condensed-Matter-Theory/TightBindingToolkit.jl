@@ -130,8 +130,12 @@ Finding the equal-time Greens functions in momentum space of a `Model`.
 
 """
     function GetGk!(M::Model)
-        quasiCount 	=	GetCount.(M.Ham.bands, Ref(M.mu), Ref(M.T), Ref(M.stat))   ##### Matrix with 1s and 0s along the diagonal. The count of the quasiparticles at each k point determined by the bands and the chemical potential
-        M.Gk        =   transpose.(M.Ham.states .* quasiCount .* adjoint.(M.Ham.states))
+        ##### G(k) = transpose(U n U†) = conj(U) n Uᵀ, with n the diagonal of occupations of the bands at k
+        M.Gk        =   map(M.Ham.states, M.Ham.bands) do U, Es
+            occupied    =   DistFunction(Es; T = M.T, mu = M.mu, stat = M.stat)
+            W           =   conj(U) .* transpose(occupied)
+            return W * transpose(U)
+        end
     end
 
 

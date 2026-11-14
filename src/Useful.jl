@@ -193,17 +193,23 @@ Works in any dimensions.
 
         N       =   size(Gs[begin])      ##### size of the matrix being FFTed
         grid    =   size(Gs)        ##### size of the array of matrices
+        n       =   prod(N)
 
-        G   =   reshape(Gs, prod(grid))       ##### Flattening all super-indices for casting 
-        @cast G[k, i, j] |= G[k][i, j]        ##### Casting into an array for FFTW
-        G   =   reshape(G, grid..., N...)     ##### Unflattenng all super-indices back to their original ranks
+        ##### the matrices side by side, A[:, :, k...] = Gs[k...], FFT on the momentum indices
+        A       =   Array{ComplexF64}(undef, N..., grid...)
+        for (c, G) in enumerate(Gs)
+            size(G) == N || throw(DimensionMismatch("matrices of sizes $N and $(size(G))"))
+            copyto!(A, (c - 1) * n + 1, G, 1, n)
+        end
+        fft!(A, length(N) + 1 : length(N) + length(grid))
+        A       ./= prod(grid)
 
-        Gr  =   fft(G, collect(1 : length(grid)))   ##### FFT on the momentum indices
-        Gr  =   reshape(Gr, prod(grid), N...)
-        @cast Gr[k][i, j] |= Gr[k, i, j]
-
-        Gr    =   reshape(Gr, grid...) / prod(grid)
-
+        Gr      =   similar(Gs)
+        for c in eachindex(Gr)
+            G       =   Matrix{ComplexF64}(undef, N...)
+            copyto!(G, 1, A, (LinearIndices(Gr)[c] - 1) * n + 1, n)
+            Gr[c]   =   G
+        end
         return Gr
     end
 
