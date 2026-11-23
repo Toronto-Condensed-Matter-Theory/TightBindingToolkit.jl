@@ -2,7 +2,7 @@ module LatHam
     export FillHamiltonian, FillPairingHamiltonian, LatticeHamiltonian, DiagonalizeHamiltonian!, Slater, SingleParticleFidelity, SlaterOverlap, GaugeFix!
 
     using ..TightBindingToolkit.LatticeStruct: Lattice
-    import ..TightBindingToolkit.Hams: FillHamiltonian, DiagonalizeHamiltonian!
+    import ..TightBindingToolkit.Hams: FillHamiltonian, FillPairingHamiltonian, DiagonalizeHamiltonian!
 
     using LinearAlgebra
 
