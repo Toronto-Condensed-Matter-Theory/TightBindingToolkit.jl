@@ -62,7 +62,7 @@ export Hamiltonian , FillHoppingHamiltonian, FillPairingHamiltonian, FillHamilto
 
 include("LatticeHamiltonian.jl")
 using .LatHam
-export FillHamiltonian, LatticeHamiltonian, DiagonalizeHamiltonian!, Slater, SingleParticleFidelity, SlaterOverlap, GaugeFix!
+export FillHamiltonian, FillPairingHamiltonian, LatticeHamiltonian, DiagonalizeHamiltonian!, Slater, SingleParticleFidelity, SlaterOverlap, GaugeFix!
 
 ##### Module to define a Tight-Binding Model structure which takes into account thermodynamical parameters such as temperature and filling etc.
 include("Model.jl")

@@ -1,5 +1,5 @@
 module LatHam
-    export FillHamiltonian, LatticeHamiltonian, DiagonalizeHamiltonian!, Slater, SingleParticleFidelity, SlaterOverlap, GaugeFix!
+    export FillHamiltonian, FillPairingHamiltonian, LatticeHamiltonian, DiagonalizeHamiltonian!, Slater, SingleParticleFidelity, SlaterOverlap, GaugeFix!
 
     using ..TightBindingToolkit.LatticeStruct: Lattice
     import ..TightBindingToolkit.Hams: FillHamiltonian, DiagonalizeHamiltonian!
@@ -48,6 +48,49 @@ and on-site bonds (zero distance, target = base) are symmetrized as `(M + M')/2`
     end
 
 @doc """
+```julia
+FillPairingHamiltonian( lattice::Lattice{2} )
+```
+Fills the Pairing Hamiltonian matrix for a given `Lattice` object using the bonds stored in the `Lattice` object.
+The conventions match the momentum-space `FillPairingHamiltonian`: on-site fields enter with a minus sign, `-∑ fields[site] .* OnSiteMats`,
+and on-site bonds (zero distance, target = base) are anti-symmetrized as `(M - M^T)/2`, while every other bond adds `M` and its negative transpose on the conjugate bond.
+"""
+    function FillPairingHamiltonian( lattice::Lattice{2} )
+
+        localDim    = lattice.uc.localDim
+        Hamsize     = lattice.length * localDim
+        Ham         = zeros( ComplexF64 , Hamsize , Hamsize )
+
+        block(s)    = localDim * (s - 1) + 1 : localDim * s
+
+        for site in 1:lattice.length
+            ############# On-Site terms
+            mat = sum( lattice.fields[site] .* lattice.uc.OnSiteMats )
+            #####! Explicitly anti-symmetrized #####
+            Ham[block(site), block(site)] -= (mat - transpose(mat)) / 2
+
+            ############# Bond terms
+            for neighbour in 1:size(lattice.bondSites, 2)
+
+                target  =   lattice.bondSites[site, neighbour]
+                target == 0 && continue
+                mat     =   lattice.bondMats[site, neighbour]
+
+                if target == site && iszero(lattice.bondDists[site, neighbour])
+                    ##### On-site bond: anti-symmetrized, exactly as in the momentum-space Hamiltonian.
+                    Ham[block(site), block(site)]   += (mat - transpose(mat)) / 2
+                else
+                    Ham[block(site), block(target)] += mat
+                    Ham[block(target), block(site)] -= transpose(mat)
+                end
+            end
+        end
+
+        return Ham
+    end
+
+
+@doc """
 `LatticeHamiltonian` is a data type representing a general real-space Hamiltonian constructed using a `Lattice` object.
 
 # Attributes
@@ -76,6 +119,18 @@ LatticeHamiltonian( lattice::Lattice{2} )
             Hamsize     = lattice.length * localDim
 
             return new{}(FillHamiltonian(lattice), Vector{Float64}(undef, Hamsize), Matrix{ComplexF64}(undef, Hamsize, Hamsize), false, (0.0, 0.0))
+        end
+
+        function LatticeHamiltonian(hoppinglattice::Lattice{2}, pairinglattice::Lattice{2})
+
+            localDim    = hoppinglattice.uc.localDim
+            Hamsize     = 2 * hoppinglattice.length * localDim
+
+            hoppingH = FillHamiltonian(hoppinglattice)
+            pairingH = FillPairingHamiltonian(pairinglattice)
+            H = [hoppingH adjoint(pairingH); pairingH -transpose(hoppingH)]
+
+            return new{}(H, Vector{Float64}(undef, Hamsize), Matrix{ComplexF64}(undef, Hamsize, Hamsize), true, (0.0, 0.0))
         end
     end
 

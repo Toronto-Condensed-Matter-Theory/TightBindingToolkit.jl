@@ -7,7 +7,7 @@ module LatModel
     using ..TightBindingToolkit.LatHam: LatticeHamiltonian
     using ..TightBindingToolkit.TBModel: FindFilling, GetCount
 
-    import ..TightBindingToolkit.TBModel: GetMu!, GetFilling!, GetGr!, SolveModel!, GetGap!
+    import ..TightBindingToolkit.TBModel: GetMu!, GetFilling!, GetGr!, SolveModel!, GetGap!, GetGroundStateEnergyDensity
 
 
     mutable struct LatticeModel
@@ -25,13 +25,20 @@ module LatModel
         Correlations
         """
         Gr      ::  Matrix{ComplexF64}
-        
+
+        ##### Chosen the default value of filling to be -1 which is unphysical so that the code knows when filling has not been provided and has to be calculated from mu instead!
         function LatticeModel(lattice::Lattice{2}, Ham::LatticeHamiltonian ; T::Float64=1e-3, filling::Float64=-1.0, mu::Float64=0.0, stat::Int64=-1)
 
             localDim    = lattice.uc.localDim
             Hamsize     = lattice.length * localDim
             return new{}(lattice, Ham, T, filling, mu, stat, -999.0, Matrix{ComplexF64}(undef, Hamsize, Hamsize))
-        ##### Chosen the default value of filling to be -1 which is unphysical so that the code knows when filling has not been provided and has to be calculated from mu instead!
+        end
+        ##### Automatically cosntruct the lattice hamiltonian if only the unit cell is passed #####
+        function LatticeModel(lattice::Lattice{2}; T::Float64=1e-3, filling::Float64=-1.0, mu::Float64=0.0, stat::Int64=-1)
+
+            localDim    = lattice.uc.localDim
+            Hamsize     = lattice.length * localDim
+            return new{}(lattice, LatticeHamiltonian(lattice), T, filling, mu, stat, -999.0, Matrix{ComplexF64}(undef, Hamsize, Hamsize))
         end
     end
 
@@ -73,6 +80,11 @@ module LatModel
     function SolveModel!(M::LatticeModel ; get_correlations::Bool = true, get_gap::Bool = false, verbose::Bool = true, mu_tol::Float64 = 1e-3, filling_tol::Float64 = 1e-6)
         @assert M.Ham.is_BdG==false "BdG Hamiltonians should be solved using a BdGModel"
 
+        ##### Check if Hamiltonian has already been diagonalized. If not diagonalize it.
+        if isempty(M.Ham.bands)
+            DiagonalizeHamiltonian!(M.Ham)
+        end
+
         if M.filling<0    ##### Must imply that filling was not provided by user and hence needs to be calculated from given mu
             GetFilling!(M)
         else
@@ -89,6 +101,19 @@ module LatModel
         
         if verbose
             @info "System Filled!"
+        end
+    end
+
+    function GetGroundStateEnergyDensity(M::LatticeModel)
+        @assert !isempty(M.Ham.bands) "Model hamiltonian has not been diagonalized!"
+        ##### energy eigenstates are already sorted in real-space #####
+        N = prod(M.lattice.size)
+        ##### sum over states with energies below the chemical potential #####
+        mu_ind = searchsortedfirst(M.Ham.bands, M.mu)
+        if mu_ind > 1
+            return @views sum(M.Ham.bands[1:mu_ind - 1]) / N
+        else
+            return 0.0
         end
     end
 
