@@ -5,7 +5,7 @@ module BdG
     using ..TightBindingToolkit.UCell: UnitCell
     using ..TightBindingToolkit.DesignUCell: ModifyIsotropicFields!, Lookup
     using ..TightBindingToolkit.BZone:BZ, MomentumPhaseFFT
-    using ..TightBindingToolkit.Hams:Hamiltonian, ModifyHamiltonianField!
+    using ..TightBindingToolkit.Hams:Hamiltonian, ModifyHamiltonianField!, DiagonalizeHamiltonian!
 
     using LinearAlgebra, Tullio, TensorCast, Logging, Statistics
 
@@ -53,9 +53,26 @@ module BdG
         Fk      ::  Array{Matrix{ComplexF64}}
         Gr      ::  Array{Matrix{ComplexF64}}
         Fr      ::  Array{Matrix{ComplexF64}}
-
-        BdGModel(uc_hop::UnitCell, uc_pair::UnitCell, bz::BZ, Ham::Hamiltonian ; T::Float64=1e-3, filling::Float64=-1.0, mu::Float64=0.0, stat::Int64=-1) = new{}(uc_hop, uc_pair, bz, Ham, T, filling, mu, -999.0, stat ,Array{Matrix{ComplexF64}}(undef, zeros(Int64, length(uc_hop.primitives))...), Array{Matrix{ComplexF64}}(undef, zeros(Int64, length(uc_hop.primitives))...), Array{Matrix{ComplexF64}}(undef, zeros(Int64, length(uc_hop.primitives))...),Array{Matrix{ComplexF64}}(undef, zeros(Int64, length(uc_hop.primitives))...))
         ##### Chosen the default value of filling to be -1 which is unphysical so that the code knows when filling has not been provided and has to be calculated from mu instead!
+        BdGModel(uc_hop::UnitCell, uc_pair::UnitCell, bz::BZ, Ham::Hamiltonian ; 
+            T::Float64=1e-3, filling::Float64=-1.0, mu::Float64=0.0, stat::Int64=-1) = new{}(
+                uc_hop, uc_pair, bz, Ham, 
+                T, filling, mu, -999.0, stat,
+                Array{Matrix{ComplexF64}}(undef, zeros(Int64, length(uc_hop.primitives))...), 
+                Array{Matrix{ComplexF64}}(undef, zeros(Int64, length(uc_hop.primitives))...), 
+                Array{Matrix{ComplexF64}}(undef, zeros(Int64, length(uc_hop.primitives))...),
+                Array{Matrix{ComplexF64}}(undef, zeros(Int64, length(uc_hop.primitives))...),
+            )
+        ##### Fill the hamiltonian automatically when a hopping and pairing unit cell, along with the Brillouin zone is passed.
+        BdGModel(uc_hop::UnitCell, uc_pair::UnitCell, bz::BZ, ; 
+            T::Float64=1e-3, filling::Float64=-1.0, mu::Float64=0.0, stat::Int64=-1) = new{}(
+                uc_hop, uc_pair, bz, Hamiltonian(uc_hop, uc_pair, bz), 
+                T, filling, mu, -999.0, stat,
+                Array{Matrix{ComplexF64}}(undef, zeros(Int64, length(uc_hop.primitives))...), 
+                Array{Matrix{ComplexF64}}(undef, zeros(Int64, length(uc_hop.primitives))...), 
+                Array{Matrix{ComplexF64}}(undef, zeros(Int64, length(uc_hop.primitives))...),
+                Array{Matrix{ComplexF64}}(undef, zeros(Int64, length(uc_hop.primitives))...),
+            )
     end
 
 
@@ -193,8 +210,10 @@ one-step function to find all the attributes in  BdGModel after it has been init
 """
     function SolveModel!(M::BdGModel ; mu_guess::Float64 = 2*M.Ham.bandwidth[1] + 2*M.filling * (M.Ham.bandwidth[2] - M.Ham.bandwidth[1]), get_correlations::Bool = true, get_gap::Bool = false, verbose::Bool = true, mu_tol::Float64 = 1e-3, filling_tol::Float64 = 1e-6)
         @assert M.Ham.is_BdG==true "Use other format for pure hopping Hamiltonian"
-        # println(mu_guess)
-        # println(M.Ham.bandwidth)
+        ##### Check if Hamiltonian has already been diagonalized. If not diagonalize it.
+        if isempty(M.Ham.bands)
+            DiagonalizeHamiltonian!(M.Ham)
+        end
         if M.filling<0    ##### Must imply that filling was not provided by user and hence needs to be calculated from given mu
             GetFilling!(M)
         else
@@ -202,7 +221,6 @@ one-step function to find all the attributes in  BdGModel after it has been init
         end
 
         if get_gap
-
             energies    =   sort(reduce(vcat, M.Ham.bands))
             M.gap       =   energies[min(floor(Int64, length(energies)*0.5) + 1, length(energies))] - energies[floor(Int64, length(energies)*0.5)]
         end
