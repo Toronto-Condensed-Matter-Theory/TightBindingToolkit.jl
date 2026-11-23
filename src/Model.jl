@@ -6,7 +6,7 @@ module TBModel
     using ..TightBindingToolkit.UCell: UnitCell, Bond
     using ..TightBindingToolkit.BZone: BZ, MomentumPhaseFFT
     using ..TightBindingToolkit.Parameters: Param
-    using ..TightBindingToolkit.Hams:Hamiltonian
+    using ..TightBindingToolkit.Hams:Hamiltonian, DiagonalizeHamiltonian!
 
     using LinearAlgebra, Logging, Statistics
 
@@ -48,9 +48,22 @@ You can either input a filling, or a chemical potential. The corresponding μ fo
         """
         Gk      ::  Array{Matrix{ComplexF64}}
         Gr      ::  Array{Matrix{ComplexF64}}
-        
-        Model(uc::UnitCell{2}, bz::BZ, Ham::Hamiltonian ; T::Float64=1e-3, filling::Float64=-1.0, mu::Float64=0.0, stat::Int64=-1) = new{}(uc, bz, Ham, T, filling, mu, stat, -999.0, Array{Matrix{ComplexF64}}(undef, zeros(Int64, length(uc.primitives))...), Array{Matrix{ComplexF64}}(undef, zeros(Int64, length(uc.primitives))...))
         ##### Chosen the default value of filling to be -1 which is unphysical so that the code knows when filling has not been provided and has to be calculated from mu instead!
+        Model(uc::UnitCell{2}, bz::BZ, Ham::Hamiltonian ; 
+            T::Float64=1e-3, filling::Float64=-1.0, mu::Float64=0.0, stat::Int64=-1) = new{}(
+                uc, bz, Ham, 
+                T, filling, mu, stat, -999.0, 
+                Array{Matrix{ComplexF64}}(undef, zeros(Int64, length(uc.primitives))...), 
+                Array{Matrix{ComplexF64}}(undef, zeros(Int64, length(uc.primitives))...),
+            )
+        ##### Fill the hamiltonian automatically given a unitcell and Brillouin zone #####
+        Model(uc::UnitCell{2}, bz::BZ; 
+            T::Float64=1e-3, filling::Float64=-1.0, mu::Float64=0.0, stat::Int64=-1) = new{}(
+                uc, bz, Hamiltonian(uc, bz), 
+                T, filling, mu, stat, -999.0, 
+                Array{Matrix{ComplexF64}}(undef, zeros(Int64, length(uc.primitives))...), 
+                Array{Matrix{ComplexF64}}(undef, zeros(Int64, length(uc.primitives))...),
+            )
     end
 
 
@@ -161,8 +174,19 @@ SolveModel!(M::Model)
 one-step function to find all the attributes in Model after it has been initialized.
 
 """
-    function SolveModel!(M::Model ; mu_guess::Float64 = M.Ham.bandwidth[1] + M.filling * (M.Ham.bandwidth[2] - M.Ham.bandwidth[1]), get_correlations::Bool = true, get_gap::Bool = false, verbose::Bool = true, mu_tol::Float64 = 1e-3, filling_tol::Float64 = 1e-6)
+    function SolveModel!(M::Model ; 
+        mu_guess::Float64 = M.Ham.bandwidth[1] + M.filling * (M.Ham.bandwidth[2] - M.Ham.bandwidth[1]), 
+        get_correlations::Bool = true, 
+        get_gap::Bool = false, 
+        verbose::Bool = true, 
+        mu_tol::Float64 = 1e-3, 
+        filling_tol::Float64 = 1e-6
+    )
         @assert M.Ham.is_BdG==false "BdG Hamiltonians should be solved using a BdGModel"
+        ##### Check if Hamiltonian has already been diagonalized. If not diagonalize it.
+        if isempty(M.Ham.bands)
+            DiagonalizeHamiltonian!(M.Ham)
+        end
         ##### TODO Pass initial guess of chemical potential to GetMu! if provided by user
         if M.filling<0    ##### Must imply that filling was not provided by user and hence needs to be calculated from given mu
             GetFilling!(M)
