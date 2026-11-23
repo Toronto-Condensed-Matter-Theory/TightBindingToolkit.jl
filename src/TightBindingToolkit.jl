@@ -67,7 +67,7 @@ export FillHamiltonian, LatticeHamiltonian, DiagonalizeHamiltonian!, Slater, Sin
 ##### Module to define a Tight-Binding Model structure which takes into account thermodynamical parameters such as temperature and filling etc.
 include("Model.jl")
 using .TBModel
-export Model , FindFilling , GetMu! , GetFilling! , GetCount , GetGk! , GetGr!, SolveModel!, GetGap!, FreeEnergy, GetOrderParameter, FindEntropy, GetBondCoorelation, GetRSEnergy
+export Model , FindFilling , GetMu! , GetFilling! , GetCount , GetGk! , GetGr!, SolveModel!, GetGap!, FreeEnergy, GetOrderParameter, FindEntropy, GetBondCoorelation, GetRSEnergy, GetGroundStateEnergyDensity
 
 include("LatticeModel.jl")
 using .LatModel
@@ -81,7 +81,7 @@ export Translations, Degeneracies, FindQuantumNumbers
 ##### Module to define the equivalent but for bdG systems with pairing.
 include("BdGModel.jl")
 using .BdG
-export BdGModel, FindFilling , GetMu! , GetFilling! , GetGk! , GetGr!, SolveModel!, GetGap!, FreeEnergy, FindEntropy, GetGroundEnergy, GetRSEnergy
+export BdGModel, FindFilling , GetMu! , GetFilling! , GetGk! , GetGr!, SolveModel!, GetGap!, FreeEnergy, FindEntropy, GetGroundEnergy, GetRSEnergy, GetGroundStateEnergyDensity
 
 ##### Module to calculate generalized Chern numbers
 include("Chern.jl")

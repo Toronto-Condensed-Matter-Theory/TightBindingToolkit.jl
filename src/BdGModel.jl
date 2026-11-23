@@ -9,7 +9,7 @@ module BdG
 
     using LinearAlgebra, Tullio, TensorCast, Logging, Statistics
 
-    import ..TightBindingToolkit.TBModel:FindFilling, GetMu!, GetFilling!, GetGk!, GetGr!, SolveModel!, GetGap!, FreeEnergy, FindEntropy, GetRSEnergy, GetBondCoorelation
+    import ..TightBindingToolkit.TBModel:FindFilling, GetMu!, GetFilling!, GetGk!, GetGr!, SolveModel!, GetGap!, FreeEnergy, FindEntropy, GetRSEnergy, GetBondCoorelation, GetGroundStateEnergyDensity
 
 @doc """
     `BdGModel` is a data type representing a general Tight Binding system with pairing.
@@ -233,6 +233,24 @@ one-step function to find all the attributes in  BdGModel after it has been init
         if verbose
             @info "System Filled!"
         end
+    end
+
+@doc """
+```julia
+GetGroundStateEnergy(M::BdGModel)
+```
+Returns the many-body ground-state energy of the BdG-quasiparticle vacuum state.
+
+""" 
+    function GetGroundStateEnergyDensity(M::BdGModel)
+        @assert !isempty(M.Ham.bands) "Model hamiltonian has not been diagonalized!"
+        ##### collect all energy eigenstates in a vector #####
+        energies = reduce(vcat, M.Ham.bands)
+        sort!(energies)
+        N_k = prod(size(M.Ham.bands))
+        n = length(energies)÷2
+        ##### sum over all the negative energies in the particle-hole symmetric BdG spectrum #####
+        return @views sum(energies[1:n]) / (2*N_k)
     end
 
 

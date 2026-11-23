@@ -1,6 +1,6 @@
 module TBModel
 
-    export Model , FindFilling , GetMu! , GetFilling! , GetCount , GetGk! , GetGr!, SolveModel!, GetGap!, FreeEnergy, GetOrderParameter, FindEntropy, GetRSEnergy, GetBondCoorelation
+    export Model , FindFilling , GetMu! , GetFilling! , GetCount , GetGk! , GetGr!, SolveModel!, GetGap!, FreeEnergy, GetOrderParameter, FindEntropy, GetRSEnergy, GetBondCoorelation, GetGroundStateEnergyDensity
 
     using ..TightBindingToolkit.Useful: Meshgrid, DistFunction, DeriDistFunction, FFTArrayofMatrix, BinarySearch
     using ..TightBindingToolkit.UCell: UnitCell, Bond
@@ -207,6 +207,28 @@ one-step function to find all the attributes in Model after it has been initiali
         
         if verbose
             @info "System Filled!"
+        end
+    end
+
+@doc """
+```julia
+GetGroundStateEnergy(M::Model)
+```
+Returns the many-body ground-state energy of the filled-band (upto model filling) state.
+
+""" 
+    function GetGroundStateEnergyDensity(M::Model)
+        @assert !isempty(M.Ham.bands) "Model hamiltonian has not been diagonalized!"
+        ##### collect all energy eigenstates in a vector #####
+        energies = reduce(vcat, M.Ham.bands)
+        sort!(energies)
+        N_k = prod(size(M.Ham.bands))
+        ##### sum over states with energies below the chemical potential #####
+        mu_ind = searchsortedfirst(energies, M.mu)
+        if mu_ind > 1
+            return @views sum(energies[1:mu_ind - 1]) / N_k
+        else
+            return 0.0
         end
     end
 
