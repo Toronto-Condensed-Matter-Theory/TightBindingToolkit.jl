@@ -20,7 +20,7 @@ If given `mat` attribute is a number, it is converted into a 1x1 matrix when ent
 
 		dims 	=	repeat([uc.localDim], T)
 		@assert size(mat) == Tuple(dims) "Given Interaction matrix has the inconsistent dimensions as compared to UnitCell!"
-	
+		@assert size(offset) == length(uc.primitives) "Inconsistent offset vector dimension as compared to the UnitCell basis dimension!"
 		if base <= length(uc.basis) && target <= length(uc.basis)
 			if norm( sum(offset .* uc.primitives) .+ (uc.basis[target] .- uc.basis[base] ) ) ≈ dist
 				push!( uc.bonds , Bond( base , target , offset , ComplexF64.(mat) , dist, label ) )
@@ -35,6 +35,8 @@ If given `mat` attribute is a number, it is converted into a 1x1 matrix when ent
 	function AddAnisotropicBond!( uc::UnitCell{T} , base::Int64 , target::Int64 , offset::Vector{Int64} , mat::Number , dist::Float64, label::String ) where {T}
 	
 		@assert uc.localDim == 1 "Passing a scalar to a bond is only possible if localDim of UnitCell is 1"
+		@assert size(offset) == length(uc.primitives) "Inconsistent offset vector dimension as compared to the UnitCell basis dimension!"
+
 		dims 	=	repeat([uc.localDim], T)
 	
 		AddAnisotropicBond!( uc, base, target, offset, ComplexF64.(reshape([mat], dims...)), dist, label)
@@ -56,6 +58,8 @@ The optional input `subs` is meant for isotropic bonds when only a subset of sub
 
 		dims 	=	repeat([uc.localDim], T)
 		@assert size(mat) == Tuple(dims) "Interaction matrix has the inconsistent dimensions as compared to UnitCell!"
+		@assert size(offset) == length(uc.primitives) "Inconsistent offset vector dimension as compared to the UnitCell basis dimension!"
+
 		offsets 		=	GetAllOffsets(checkOffsetRange, length(uc.primitives))    
 	
 		for i in subs
@@ -76,6 +80,8 @@ The optional input `subs` is meant for isotropic bonds when only a subset of sub
 	function AddIsotropicBonds!( uc::UnitCell{T} , dist::Float64 , mat::Number , label::String; checkOffsetRange::Int64=1 , subs::Vector{Int64}=collect(1:length(uc.basis))) where {T}
 
 		@assert uc.localDim == 1 "Passing a scalar to a bond is only possible if localDim of UnitCell is 1"
+		@assert size(offset) == length(uc.primitives) "Inconsistent offset vector dimension as compared to the UnitCell basis dimension!"
+
 		dims 	        =	repeat([uc.localDim], T)
 		
 		AddIsotropicBonds!( uc, dist, ComplexF64.(reshape([mat], dims...)), label; checkOffsetRange = checkOffsetRange, subs = subs )
